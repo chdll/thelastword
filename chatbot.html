@@ -58,8 +58,8 @@
             messageLog.textContent = "Couldn't load messages. Are you a participant?";
             return;
         }
-        // messages are newest-first, so we reverse them for display
-        const formattedMessages = messages.reverse().map(m => {
+        // messages are newest-first, so we make a copy and then reverse it for display
+        const formattedMessages = [...messages].reverse().map(m => {
             const senderName = m.sender?.name || 'System';
             return `${senderName}: ${m.plaintext}`;
         }).join('\n');
