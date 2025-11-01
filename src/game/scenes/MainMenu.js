@@ -11,6 +11,10 @@ export class MainMenu extends Scene
     {
         this.textBoxes = []; // Store all created text boxes for cleanup
         this.currentDepth = 10; // Start depth for layering text boxes
+        this.processedMessages = new Set(); // Track which messages we've already displayed
+        
+        // Initialize TalkJS
+        this.initializeTalkJS();
         this.load.image('awesome hacker', 'assets/proxy-image.jpeg');
         this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'awesome hacker');
         // Modern rounded textbox with drop shadow
@@ -85,12 +89,12 @@ export class MainMenu extends Scene
         // Get the input element
         const inputElement = dom.getChildByID('textInput');
         
-        // Handle Enter key to create animated text box
+        // Handle Enter key to send message via TalkJS
         inputElement.addEventListener('keypress', (event) => {
             if (event.key === 'Enter') {
                 const inputValue = inputElement.value.trim();
-                if (inputValue) {
-                    this.createAnimatedTextBox(inputValue);
+                if (inputValue && this.conversation) {
+                    this.conversation.send(inputValue);
                     inputElement.value = ''; // Clear input
                 }
             }
@@ -231,5 +235,67 @@ export class MainMenu extends Scene
         
         // Store references for cleanup (initial tween will be replaced after emergence)
         this.textBoxes.push({ text, gfx, container, tween: null });
+    }
+    
+    async initializeTalkJS() {
+        try {
+            // Get user from URL parameter or default to alice
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentUserId = urlParams.get('user') || 'alice';
+            
+            // Hardcoded user data
+            const users = {
+                alice: {
+                    id: "alice",
+                    name: "Alice"
+                },
+                bob: {
+                    id: "bob",
+                    name: "Bob"
+                }
+            };
+            
+            const me = users[currentUserId];
+            const other = currentUserId === 'alice' ? users.bob : users.alice;
+            
+            // Import TalkJS dynamically
+            const { getTalkSession } = await import('https://cdn.jsdelivr.net/npm/@talkjs/core@1.5.8');
+            
+            const session = getTalkSession({
+                host: "durhack.talkjs.com",
+                appId: "tCc397Q9",
+                userId: me.id
+            });
+            
+            await session.user(me.id).createIfNotExists(me);
+            await session.user(other.id).createIfNotExists(other);
+            
+            const conversationId = [me.id, other.id].sort().join("--");
+            this.conversation = session.conversation(conversationId);
+            await this.conversation.createIfNotExists();
+            await this.conversation.participant(other.id).createIfNotExists();
+            
+            // Subscribe to messages
+            this.conversation.subscribeMessages((messages, loadedAll) => {
+                if (messages === null) {
+                    console.error("Couldn't load messages");
+                    return;
+                }
+                
+                // Process new messages
+                messages.forEach(m => {
+                    if (!this.processedMessages.has(m.id)) {
+                        this.processedMessages.add(m.id);
+                        const senderName = m.sender?.name || 'System';
+                        const messageText = `${senderName}: ${m.plaintext}`;
+                        this.createAnimatedTextBox(messageText);
+                    }
+                });
+            });
+            
+            console.log('TalkJS initialized successfully');
+        } catch (error) {
+            console.error('Error initializing TalkJS:', error);
+        }
     }
 }
