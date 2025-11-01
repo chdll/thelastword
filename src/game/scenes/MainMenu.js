@@ -7,6 +7,12 @@ export class MainMenu extends Scene
         super('MainMenu');
     }
 
+    preload ()
+    {
+        // Load the background image
+        this.load.image('awesome hacker', 'assets/proxy-image.jpeg');
+    }
+
     create ()
     {
         this.textBoxes = []; // Store all created text boxes for cleanup
@@ -15,7 +21,7 @@ export class MainMenu extends Scene
         
         // Initialize TalkJS
         this.initializeTalkJS();
-        this.load.image('awesome hacker', 'assets/proxy-image.jpeg');
+        
         this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'awesome hacker');
         // Modern rounded textbox with drop shadow
         const centerX = window.innerWidth / 2 - 100;
