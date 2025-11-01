@@ -70,6 +70,18 @@ export class MainMenu extends Scene
         repositionInput(this.scale.gameSize);
         this.scale.on('resize', repositionInput);
         
+        // Store input position for text box emergence animation
+        this.inputBoxPosition = {
+            x: window.innerWidth / 2,
+            y: window.innerHeight - bottomOffset
+        };
+        
+        // Update input position on resize
+        this.scale.on('resize', (size) => {
+            this.inputBoxPosition.x = size.width / 2;
+            this.inputBoxPosition.y = size.height - bottomOffset;
+        });
+        
         // Get the input element
         const inputElement = dom.getChildByID('textInput');
         
@@ -91,6 +103,7 @@ export class MainMenu extends Scene
             this.textBoxes.forEach(box => {
                 if (box.text) box.text.destroy();
                 if (box.gfx) box.gfx.destroy();
+                if (box.container) box.container.destroy();
                 if (box.tween) box.tween.stop();
             });
             this.textBoxes = [];
@@ -122,9 +135,17 @@ export class MainMenu extends Scene
         const minY = margin;
         const maxY = window.innerHeight - 100; // Extra space for input box at bottom
         
-        // Random starting position within safe boundaries
-        const startX = Phaser.Math.Between(minX, maxX);
-        const startY = Phaser.Math.Between(minY, maxY);
+        // Start from input box position
+        const startX = this.inputBoxPosition.x;
+        const startY = this.inputBoxPosition.y;
+        
+        // Target position for initial emergence
+        const emergenceX = Phaser.Math.Between(minX, maxX);
+        const emergenceY = Phaser.Math.Between(minY, maxY);
+        
+        // Final looping position
+        const loopTargetX = Phaser.Math.Between(minX, maxX);
+        const loopTargetY = Phaser.Math.Between(minY, maxY);
         
         const text = this.add.text(startX, startY, label, {
             fontFamily: 'Arial, Helvetica, sans-serif',
@@ -133,6 +154,10 @@ export class MainMenu extends Scene
             align: 'center',
         }).setOrigin(0.5);
         
+        // Start with scale 0 for emergence effect
+        text.setScale(0);
+        text.setAlpha(0);
+        
         const gfx = this.add.graphics();
         
         // Increment depth for each new text box so newer ones appear on top
@@ -140,65 +165,71 @@ export class MainMenu extends Scene
         const gfxDepth = this.currentDepth;
         const textDepth = this.currentDepth + 1;
         
-        // Drop shadow
-        gfx.fillStyle(0x0f172a, 0.2);
-        gfx.fillRoundedRect(startX - bw / 2 + 4, startY - bh / 2 + 6, bw, bh, radius);
-        
-        // Background
-        gfx.fillStyle(0xffffff, 1);
-        gfx.fillRoundedRect(startX - bw / 2, startY - bh / 2, bw, bh, radius);
-        
-        // Subtle border
-        gfx.lineStyle(2, 0xe5e7eb, 1);
-        gfx.strokeRoundedRect(startX - bw / 2, startY - bh / 2, bw, bh, radius);
-        
         gfx.setDepth(gfxDepth);
         text.setDepth(textDepth);
         
-        // Create animation path - random movement within safe boundaries
-        const targetX = Phaser.Math.Between(minX, maxX);
-        const targetY = Phaser.Math.Between(minY, maxY);
+        // Create a container for the graphics background
+        const container = this.add.container(startX, startY);
         
-        const duration = Phaser.Math.Between(2000, 4000);
+        // Draw graphics at local position (0,0) relative to container
+        const drawGraphics = () => {
+            gfx.clear();
+            
+            // Drop shadow
+            gfx.fillStyle(0x0f172a, 0.2);
+            gfx.fillRoundedRect(-bw / 2 + 4, -bh / 2 + 6, bw, bh, radius);
+            
+            // Background
+            gfx.fillStyle(0xffffff, 1);
+            gfx.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, radius);
+            
+            // Subtle border
+            gfx.lineStyle(2, 0xe5e7eb, 1);
+            gfx.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, radius);
+        };
         
-        // Animate text
-        const textTween = this.tweens.add({
-            targets: text,
-            x: targetX,
-            y: targetY,
-            duration: duration,
-            ease: 'Sine.easeInOut',
-            yoyo: true,
-            repeat: -1
-        });
+        drawGraphics();
         
-        // Animate graphics to follow text
+        // Add graphics to container
+        container.add(gfx);
+        container.setDepth(gfxDepth);
+        
+        // Set container initial state
+        container.setScale(0);
+        container.setAlpha(0);
+        
+        // Phase 1: Emerge from input box with scale and fade in
         this.tweens.add({
-            targets: { x: startX, y: startY },
-            x: targetX,
-            y: targetY,
-            duration: duration,
-            ease: 'Sine.easeInOut',
-            yoyo: true,
-            repeat: -1,
-            onUpdate: (tween, target) => {
-                gfx.clear();
+            targets: [text, container],
+            x: emergenceX,
+            y: emergenceY,
+            scale: 1,
+            alpha: 1,
+            duration: 800,
+            ease: 'Back.easeOut',
+            onComplete: () => {
+                // Phase 2: Start looping animation
+                const duration = Phaser.Math.Between(2000, 4000);
                 
-                // Drop shadow
-                gfx.fillStyle(0x0f172a, 0.2);
-                gfx.fillRoundedRect(target.x - bw / 2 + 4, target.y - bh / 2 + 6, bw, bh, radius);
+                const textTween = this.tweens.add({
+                    targets: [text, container],
+                    x: loopTargetX,
+                    y: loopTargetY,
+                    duration: duration,
+                    ease: 'Sine.easeInOut',
+                    yoyo: true,
+                    repeat: -1
+                });
                 
-                // Background
-                gfx.fillStyle(0xffffff, 1);
-                gfx.fillRoundedRect(target.x - bw / 2, target.y - bh / 2, bw, bh, radius);
-                
-                // Subtle border
-                gfx.lineStyle(2, 0xe5e7eb, 1);
-                gfx.strokeRoundedRect(target.x - bw / 2, target.y - bh / 2, bw, bh, radius);
+                // Update stored reference with the looping tween
+                const boxIndex = this.textBoxes.findIndex(box => box.text === text);
+                if (boxIndex !== -1) {
+                    this.textBoxes[boxIndex].tween = textTween;
+                }
             }
         });
         
-        // Store references for cleanup
-        this.textBoxes.push({ text, gfx, tween: textTween });
+        // Store references for cleanup (initial tween will be replaced after emergence)
+        this.textBoxes.push({ text, gfx, container, tween: null });
     }
 }
