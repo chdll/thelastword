@@ -8,19 +8,26 @@ export class TalkJSService {
         this.messageCallback = null;
         this.conversationHistory = []; // Store recent messages for context
         this.maxHistoryLength = 10; // Keep last 10 messages for context
+        this.currentUserId = null;
+        this.otherUserId = null;
+        this.lastMessageSenderId = null; // Track who sent the last message
+        this.isMyTurn = true; // Start with it being the first player's turn
+        this.turnChangeCallback = null; // Callback when turn changes
     }
 
     /**
      * Initialize TalkJS session
      * @param {Function} onMessageReceived - Callback for when new messages arrive
+     * @param {Function} onTurnChange - Optional callback for when turn changes (receives boolean isMyTurn)
      */
-    async initialize(onMessageReceived) {
+    async initialize(onMessageReceived, onTurnChange = null) {
         this.messageCallback = onMessageReceived;
+        this.turnChangeCallback = onTurnChange;
 
         try {
             // Get user from URL parameter or default to alice
             const urlParams = new URLSearchParams(window.location.search);
-            const currentUserId = urlParams.get('user') || 'alice';
+            this.currentUserId = urlParams.get('user') || 'alice';
             
             // Hardcoded user data
             const users = {
@@ -34,8 +41,9 @@ export class TalkJSService {
                 }
             };
             
-            const me = users[currentUserId];
-            const other = currentUserId === 'alice' ? users.bob : users.alice;
+            const me = users[this.currentUserId];
+            this.otherUserId = this.currentUserId === 'alice' ? 'bob' : 'alice';
+            const other = users[this.otherUserId];
             
             // Import TalkJS dynamically
             const { getTalkSession } = await import('https://cdn.jsdelivr.net/npm/@talkjs/core@1.5.8');
@@ -68,18 +76,6 @@ export class TalkJSService {
                         this.processedMessages.add(m.id);
                         const senderName = m.sender?.name || 'System';
                         const messageText = `${senderName}: ${m.plaintext}`;
-                        
-                        // Store in conversation history for context
-                        this.conversationHistory.push({
-                            sender: senderName,
-                            text: m.plaintext,
-                            timestamp: m.timestamp || Date.now()
-                        });
-                        
-                        // Keep only recent messages
-                        if (this.conversationHistory.length > this.maxHistoryLength) {
-                            this.conversationHistory.shift();
-                        }
                         
                         // Extract effects data from custom field if present
                         let effectsData = null;
@@ -301,11 +297,17 @@ Return ONLY valid JSON matching the schema.`;
      * Send a message through TalkJS (with optional Gemini API processing)
      * @param {string} message - The message to send
      * @param {boolean} processWithAPI - Whether to process the message through Gemini API first (default: true)
-     * @returns {Promise<Object|null>} - The processed data from Gemini (if processWithAPI is true)
+     * @returns {Promise<Object|null>} - The processed data from Gemini (if processWithAPI is true), or null if not your turn
      */
     async sendMessage(message, processWithAPI = true) {
         if (!this.conversation || !message.trim()) {
             return null;
+        }
+
+        // Check if it's the player's turn
+        if (!this.isMyTurn) {
+            console.warn('Not your turn! Wait for the other player to respond.');
+            return { error: 'NOT_YOUR_TURN', message: 'Wait for the other player to respond first.' };
         }
 
         try {
@@ -330,6 +332,12 @@ Return ONLY valid JSON matching the schema.`;
                 this.conversation.send(message);
             }
             
+            // Update turn state - it's now the other player's turn
+            this.isMyTurn = false;
+            if (this.turnChangeCallback) {
+                this.turnChangeCallback(this.isMyTurn);
+            }
+            
             // Return the processed data so the caller can use it for animations
             return processedData;
             
@@ -337,7 +345,33 @@ Return ONLY valid JSON matching the schema.`;
             console.error('Error sending message:', error);
             // Send original message as fallback
             this.conversation.send(message);
+            
+            // Still update turn even on error
+            this.isMyTurn = false;
+            if (this.turnChangeCallback) {
+                this.turnChangeCallback(this.isMyTurn);
+            }
+            
             return null;
         }
+    }
+
+    /**
+     * Check if it's currently this player's turn
+     * @returns {boolean} - True if it's this player's turn to send a message
+     */
+    canSendMessage() {
+        return this.isMyTurn;
+    }
+
+    /**
+     * Get the current turn state
+     * @returns {Object} - Object with isMyTurn boolean and turnMessage string
+     */
+    getTurnState() {
+        return {
+            isMyTurn: this.isMyTurn,
+            turnMessage: this.isMyTurn ? 'Your turn' : 'Waiting for opponent...'
+        };
     }
 }

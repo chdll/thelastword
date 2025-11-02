@@ -28,6 +28,9 @@ export class MainMenu extends Scene
         this.textBoxCreator = new TextBoxCreator(this);
         this.uiManager = new UIManager(this);
         
+        // Create turn indicator UI
+        this.createTurnIndicator();
+        
         // Add background image
         // this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'awesome hacker');
         var player1 = this.add.image(window.innerWidth / 4, window.innerHeight - window.innerHeight / 3, 'wizard 1');
@@ -50,15 +53,33 @@ export class MainMenu extends Scene
         
         // Create input box with Gemini API processing
         this.uiManager.createInputBox(async (message) => {
+            // Check if it's the player's turn before sending
+            if (!this.talkJSService.canSendMessage()) {
+                console.warn('Not your turn! Wait for the other player.');
+                this.showTurnWarning();
+                return;
+            }
+            
             // Process message through Gemini and send to TalkJS
             // Effects data will be embedded in the message and synced to both clients
-            await this.talkJSService.sendMessage(message);
+            const result = await this.talkJSService.sendMessage(message);
+            
+            // Handle turn error
+            if (result && result.error === 'NOT_YOUR_TURN') {
+                this.showTurnWarning();
+            }
         });
         
-        // Initialize TalkJS with callback for new messages
-        this.talkJSService.initialize((messageText, effectsData) => {
-            this.createAnimatedTextBox(messageText, effectsData);
-        });
+        // Initialize TalkJS with callback for new messages and turn changes
+        this.talkJSService.initialize(
+            (messageText, effectsData) => {
+                this.createAnimatedTextBox(messageText, effectsData);
+            },
+            (isMyTurn) => {
+                // Update UI based on turn state
+                this.updateTurnIndicator(isMyTurn);
+            }
+        );
         
         // Cleanup on scene shutdown
         this.events.once('shutdown', () => {
@@ -115,5 +136,67 @@ export class MainMenu extends Scene
         if (box.container) box.container.destroy();
         if (box.tween) box.tween.stop();
         if (box.particles) box.particles.destroy();
+    }
+
+    createTurnIndicator() {
+        // Create turn indicator at the top of the screen
+        this.turnIndicator = this.add.text(
+            window.innerWidth / 2,
+            30,
+            'Your turn',
+            {
+                fontSize: '24px',
+                fontFamily: 'Arial',
+                color: '#22c55e',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 4
+            }
+        ).setOrigin(0.5).setDepth(1000);
+    }
+
+    updateTurnIndicator(isMyTurn) {
+        if (!this.turnIndicator) return;
+        
+        if (isMyTurn) {
+            this.turnIndicator.setText('Your turn');
+            this.turnIndicator.setColor('#22c55e'); // Green
+            
+            // Enable input
+            this.uiManager.setInputEnabled(true);
+        } else {
+            this.turnIndicator.setText('Waiting for opponent...');
+            this.turnIndicator.setColor('#ef4444'); // Red
+            
+            // Disable input
+            this.uiManager.setInputEnabled(false);
+        }
+    }
+
+    showTurnWarning() {
+        // Show a temporary warning message
+        const warning = this.add.text(
+            window.innerWidth / 2,
+            window.innerHeight / 2,
+            'Not your turn!\nWait for opponent to respond.',
+            {
+                fontSize: '32px',
+                fontFamily: 'Arial',
+                color: '#ef4444',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 6,
+                align: 'center'
+            }
+        ).setOrigin(0.5).setDepth(2000);
+
+        // Fade out and destroy after 2 seconds
+        this.tweens.add({
+            targets: warning,
+            alpha: 0,
+            duration: 2000,
+            ease: 'Power2',
+            onComplete: () => warning.destroy()
+        });
     }
 }
