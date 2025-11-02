@@ -48,14 +48,16 @@ export class MainMenu extends Scene
             loop: true
         });
         
-        // Create input box
-        this.uiManager.createInputBox((message) => {
-            this.talkJSService.sendMessage(message);
+        // Create input box with Gemini API processing
+        this.uiManager.createInputBox(async (message) => {
+            // Process message through Gemini and send to TalkJS
+            // Effects data will be embedded in the message and synced to both clients
+            await this.talkJSService.sendMessage(message);
         });
         
         // Initialize TalkJS with callback for new messages
-        this.talkJSService.initialize((messageText) => {
-            this.createAnimatedTextBox(messageText);
+        this.talkJSService.initialize((messageText, effectsData) => {
+            this.createAnimatedTextBox(messageText, effectsData);
         });
         
         // Cleanup on scene shutdown
@@ -66,13 +68,32 @@ export class MainMenu extends Scene
         });
     }
     
-    createAnimatedTextBox(label) {
+    createAnimatedTextBox(label, effectsData = null) {
         // Get input box position and increment depth
         const startPosition = this.uiManager.getInputBoxPosition();
         this.currentDepth += 2;
         
-        // Create the animated text box using the TextBoxCreator
-        const box = this.textBoxCreator.create(label, startPosition, this.currentDepth);
+        // Build options object from Gemini effects data (now synced from TalkJS)
+        const options = {};
+        
+        if (effectsData) {
+            console.log('Applying synced Gemini effects to message:', label, effectsData);
+            // Handle effect (check for null, 'null' string, or empty)
+            if (effectsData.effect && effectsData.effect !== 'null' && effectsData.effect !== null) {
+                options.effect = effectsData.effect;
+            }
+            // Apply colors
+            if (effectsData.colors) {
+                options.colors = effectsData.colors;
+            }
+            // Apply animation path
+            if (effectsData.animationPath && effectsData.animationPath.length > 0) {
+                options.animationPath = effectsData.animationPath;
+            }
+        }
+        
+        // Create the animated text box using the TextBoxCreator with Gemini-generated options
+        const box = this.textBoxCreator.create(label, startPosition, this.currentDepth, options);
         
         // Store reference for cleanup
         this.textBoxes.push(box);

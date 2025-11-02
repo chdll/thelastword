@@ -66,13 +66,25 @@ export class TalkJSService {
                         this.processedMessages.add(m.id);
                         const senderName = m.sender?.name || 'System';
                         const messageText = `${senderName}: ${m.plaintext}`;
-                        newMessages.push(messageText);
+                        
+                        // Extract effects data from custom field if present
+                        let effectsData = null;
+                        if (m.custom && m.custom.effects) {
+                            try {
+                                effectsData = JSON.parse(m.custom.effects);
+                                console.log('Received message with effects:', messageText, effectsData);
+                            } catch (e) {
+                                console.error('Failed to parse effects data:', e);
+                            }
+                        }
+                        
+                        newMessages.push({ text: messageText, effects: effectsData });
                     }
                 });
                 
-                // Callback for each new message
+                // Callback for each new message with effects data
                 if (this.messageCallback && newMessages.length > 0) {
-                    newMessages.forEach(msg => this.messageCallback(msg));
+                    newMessages.forEach(msg => this.messageCallback(msg.text, msg.effects));
                 }
             });
             
@@ -108,39 +120,86 @@ export class TalkJSService {
                     imageSize: '1K',
                 },
                 responseMimeType: 'application/json',
-                // responseSchema: {
-                //     type: Type.OBJECT,
-                //     required: ["animationPath", "colour", "size", "impact_effect", "vibration"],
-                //     properties: {
-                //         animationPath: {
-                //             type: Type.ARRAY,
-                //             items: {
-                //                 type: Type.NUMBER,
-                //             },
-                //         },
-                //         colour: {
-                //             type: Type.STRING,
-                //         },
-                //         size: {
-                //             type: Type.STRING,
-                //         },
-                //         impact_effect: {
-                //             type: Type.STRING,
-                //         },
-                //         vibration: {
-                //             type: Type.NUMBER,
-                //         },
-                //     },
-                // },
+                responseSchema: {
+                    type: Type.OBJECT,
+                    required: ["effect", "colors", "animationPath"],
+                    properties: {
+                        effect: {
+                            type: Type.STRING,
+                            description: "Particle effect type: 'fire', 'ice', 'poison', 'smoke', or null"
+                        },
+                        colors: {
+                            type: Type.OBJECT,
+                            properties: {
+                                text: {
+                                    type: Type.STRING,
+                                    description: "Text color in hex format (e.g., '#ff0000')"
+                                },
+                                background: {
+                                    type: Type.NUMBER,
+                                    description: "Background color as hex number (e.g., 0xff0000)"
+                                },
+                                border: {
+                                    type: Type.NUMBER,
+                                    description: "Border color as hex number (e.g., 0xff0000)"
+                                }
+                            }
+                        },
+                        animationPath: {
+                            type: Type.ARRAY,
+                            description: "Array of animation waypoints",
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    x: { type: Type.NUMBER, description: "X position (0-1920)" },
+                                    y: { type: Type.NUMBER, description: "Y position (0-1080)" },
+                                    duration: { type: Type.NUMBER, description: "Duration to reach this point in ms (500-3000)" },
+                                    rotation: { type: Type.NUMBER, description: "Rotation in radians (0 to 6.28)" }
+                                }
+                            }
+                        }
+                    }
+                }
             };
             
             const model = 'gemini-flash-lite-latest';
+            
+            const prompt = `You are a creative game effects designer. Analyze the user's message and generate thematic visual effects for a text box animation.
+
+IMPORTANT RULES:
+1. Match the theme/mood of the message (fire for hot/explosive words, ice for cold/calm, poison for toxic/negative, smoke for mysterious)
+2. Choose colors that enhance the theme (fire = reds/oranges, ice = blues/cyans, poison = greens, smoke = grays)
+3. Create animation paths that match the energy (fast/aggressive for attacks, slow/flowing for calm, erratic for chaos)
+4. Use effects sparingly - only when truly thematic. Many messages won't need special effects.
+5. Animation coordinates: x (200-1700), y (200-800) for safe visibility
+6. Duration: 500-3000ms per waypoint (faster for aggressive, slower for calm)
+7. Rotation: 0 (no rotation) to 6.28 (full rotation) - use sparingly
+
+EXAMPLES:
+
+Message: "fireball"
+Response: {"effect":"fire","colors":{"text":"#ffffff","background":16711680,"border":13369344},"animationPath":[{"x":400,"y":400,"duration":800,"rotation":0},{"x":1500,"y":400,"duration":1200,"rotation":3.14}]}
+
+Message: "ice shard"
+Response: {"effect":"ice","colors":{"text":"#ffffff","background":52479,"border":39423},"animationPath":[{"x":960,"y":300,"duration":1500,"rotation":0},{"x":960,"y":600,"duration":2000,"rotation":0.5}]}
+
+Message: "hello there"
+Response: {"effect":null,"colors":{"text":"#0f172a","background":16777215,"border":15132395},"animationPath":[{"x":500,"y":400,"duration":2000,"rotation":0},{"x":1400,"y":400,"duration":2500,"rotation":0}]}
+
+Message: "toxic waste"
+Response: {"effect":"poison","colors":{"text":"#00ff00","background":52224,"border":39168},"animationPath":[{"x":800,"y":400,"duration":1800,"rotation":0},{"x":600,"y":600,"duration":1500,"rotation":1.57},{"x":1200,"y":500,"duration":1800,"rotation":3.14}]}
+
+Now analyze this message and generate appropriate effects:
+Message: "${message}"
+
+Return ONLY valid JSON matching the schema.`;
+
             const contents = [
                 {
                     role: 'user',
                     parts: [
                         {
-                            text: 'make this text all caps: ' + message,
+                            text: prompt,
                         },
                     ],
                 },
@@ -161,7 +220,6 @@ export class TalkJSService {
             // Parse the JSON response
             const processedData = JSON.parse(fullResponse);
             
-            console.log('Gemini processed data:', processedData);
             
             return processedData;
             
@@ -169,12 +227,16 @@ export class TalkJSService {
             console.error('Error processing message through Gemini API:', error);
             // Fallback to a default response structure if API fails
             return {
-                animationPath: [0, 0],
-                colour: '#FFFFFF',
-                size: 'medium',
-                impact_effect: 'none',
-                vibration: 0,
-                originalMessage: message
+                effect: null,
+                colors: {
+                    text: '#0f172a',
+                    background: 0xffffff,
+                    border: 0xe5e7eb
+                },
+                animationPath: [
+                    { x: 500, y: 400, duration: 2000, rotation: 0 },
+                    { x: 1400, y: 400, duration: 2500, rotation: 0 }
+                ]
             };
         }
     }
@@ -198,13 +260,19 @@ export class TalkJSService {
                 processedData = await this.processMessageThroughAPI(message);
                 console.log('Original message:', message);
                 console.log('Gemini processed data:', processedData);
-                
-                // You can use processedData for animations, effects, etc.
-                // The original message is still sent to TalkJS
             }
 
-            // Send the original message via TalkJS
-            this.conversation.send(message);
+            // Send the message via TalkJS with effects data in custom field
+            if (processedData) {
+                this.conversation.send({
+                    text: message,
+                    custom: {
+                        effects: JSON.stringify(processedData)
+                    }
+                });
+            } else {
+                this.conversation.send(message);
+            }
             
             // Return the processed data so the caller can use it for animations
             return processedData;
