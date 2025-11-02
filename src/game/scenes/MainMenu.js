@@ -13,7 +13,9 @@ export class MainMenu extends Scene
     preload ()
     {
         // Load the background image
-        this.load.image('awesome hacker', 'assets/proxy-image.jpeg');
+        // this.load.image('awesome hacker', 'assets/proxy-image.jpeg');
+        this.load.image('wizard 1', 'assets/wizard_idle_1.png');
+        this.load.image('wizard 2', 'assets/wizard_idle_2.png');
     }
 
     create ()
@@ -27,9 +29,12 @@ export class MainMenu extends Scene
         this.uiManager = new UIManager(this);
         
         // Add background image
-        this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'awesome hacker');
-        
-        
+        // this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'awesome hacker');
+        var player1 = this.add.image(window.innerWidth / 4, window.innerHeight - window.innerHeight / 3, 'wizard 1');
+        var player2 = this.add.image(window.innerWidth - window.innerWidth / 4, window.innerHeight - window.innerHeight / 3, 'wizard 1').setFlipX(true);
+        player1.setScale(0.5);
+        player2.setScale(0.5);
+        // const tween = this.tweens.add({
         // Create input box
         this.uiManager.createInputBox((message) => {
             this.talkJSService.sendMessage(message);
