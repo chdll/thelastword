@@ -7,6 +7,7 @@ export class TextBoxCreator {
         this.paddingX = 24;
         this.paddingY = 12;
         this.radius = 16;
+        this.particleTexturesCreated = new Set(); // Track created textures
     }
 
     /**
@@ -76,7 +77,6 @@ export class TextBoxCreator {
         let particles = null;
         if (options.effect) {
             particles = this.createParticleEffect(options.effect, container, currentDepth);
-            console.log(`${options.effect} particles created:`, particles);
         }
         
         // Animate the text box along the path
@@ -208,10 +208,17 @@ export class TextBoxCreator {
         }
     }
 
+    createParticleTexture(textureName, createCallback) {
+        if (!this.particleTexturesCreated.has(textureName) && !this.scene.textures.exists(textureName)) {
+            createCallback();
+            this.particleTexturesCreated.add(textureName);
+        }
+    }
+
     createFireEffect(container, depth) {
-        // Create fire particle texture
+        // Create fire particle texture (reuse if exists)
         const textureName = 'fireParticle';
-        if (!this.scene.textures.exists(textureName)) {
+        this.createParticleTexture(textureName, () => {
             const particleGraphics = this.scene.add.graphics();
             particleGraphics.fillStyle(0xff0000, 1);
             particleGraphics.fillCircle(8, 8, 6);
@@ -221,7 +228,7 @@ export class TextBoxCreator {
             particleGraphics.fillCircle(8, 8, 2);
             particleGraphics.generateTexture(textureName, 16, 16);
             particleGraphics.destroy();
-        }
+        });
         
         const emitter = this.scene.add.particles(0, 0, textureName, {
             speed: { min: 40, max: 80 },
@@ -241,9 +248,9 @@ export class TextBoxCreator {
     }
 
     createIceEffect(container, depth) {
-        // Create ice particle texture
+        // Create ice particle texture (reuse if exists)
         const textureName = 'iceParticle';
-        if (!this.scene.textures.exists(textureName)) {
+        this.createParticleTexture(textureName, () => {
             const particleGraphics = this.scene.add.graphics();
             particleGraphics.fillStyle(0x00ccff, 1);
             particleGraphics.fillCircle(8, 8, 6);
@@ -253,7 +260,7 @@ export class TextBoxCreator {
             particleGraphics.fillCircle(8, 8, 2);
             particleGraphics.generateTexture(textureName, 16, 16);
             particleGraphics.destroy();
-        }
+        });
         
         const emitter = this.scene.add.particles(0, 0, textureName, {
             speed: { min: 20, max: 50 },
@@ -274,9 +281,9 @@ export class TextBoxCreator {
     }
 
     createPoisonEffect(container, depth) {
-        // Create poison particle texture
+        // Create poison particle texture (reuse if exists)
         const textureName = 'poisonParticle';
-        if (!this.scene.textures.exists(textureName)) {
+        this.createParticleTexture(textureName, () => {
             const particleGraphics = this.scene.add.graphics();
             particleGraphics.fillStyle(0x00cc00, 1);
             particleGraphics.fillCircle(8, 8, 6);
@@ -286,7 +293,7 @@ export class TextBoxCreator {
             particleGraphics.fillCircle(8, 8, 2);
             particleGraphics.generateTexture(textureName, 16, 16);
             particleGraphics.destroy();
-        }
+        });
         
         const emitter = this.scene.add.particles(0, 0, textureName, {
             speed: { min: 10, max: 30 },
@@ -307,9 +314,9 @@ export class TextBoxCreator {
     }
 
     createSmokeEffect(container, depth) {
-        // Create smoke particle texture
+        // Create smoke particle texture (reuse if exists)
         const textureName = 'smokeParticle';
-        if (!this.scene.textures.exists(textureName)) {
+        this.createParticleTexture(textureName, () => {
             const particleGraphics = this.scene.add.graphics();
             particleGraphics.fillStyle(0x666666, 1);
             particleGraphics.fillCircle(8, 8, 6);
@@ -317,7 +324,7 @@ export class TextBoxCreator {
             particleGraphics.fillCircle(8, 8, 4);
             particleGraphics.generateTexture(textureName, 16, 16);
             particleGraphics.destroy();
-        }
+        });
         
         const emitter = this.scene.add.particles(0, 0, textureName, {
             speed: { min: 20, max: 40 },

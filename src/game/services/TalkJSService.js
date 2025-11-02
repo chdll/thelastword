@@ -59,18 +59,21 @@ export class TalkJSService {
                     return;
                 }
                 
-                // Process new messages
+                // Process new messages (batch to avoid excessive callbacks)
+                const newMessages = [];
                 messages.forEach(m => {
                     if (!this.processedMessages.has(m.id)) {
                         this.processedMessages.add(m.id);
                         const senderName = m.sender?.name || 'System';
                         const messageText = `${senderName}: ${m.plaintext}`;
-                        
-                        if (this.messageCallback) {
-                            this.messageCallback(messageText);
-                        }
+                        newMessages.push(messageText);
                     }
                 });
+                
+                // Callback for each new message
+                if (this.messageCallback && newMessages.length > 0) {
+                    newMessages.forEach(msg => this.messageCallback(msg));
+                }
             });
             
             console.log('TalkJS initialized successfully');

@@ -61,12 +61,7 @@ export class MainMenu extends Scene
         // Cleanup on scene shutdown
         this.events.once('shutdown', () => {
             this.uiManager.destroy();
-            this.textBoxes.forEach(box => {
-                if (box.text) box.text.destroy();
-                if (box.gfx) box.gfx.destroy();
-                if (box.container) box.container.destroy();
-                if (box.tween) box.tween.stop();
-            });
+            this.textBoxes.forEach(box => this.cleanupTextBox(box));
             this.textBoxes = [];
         });
     }
@@ -81,5 +76,19 @@ export class MainMenu extends Scene
         
         // Store reference for cleanup
         this.textBoxes.push(box);
+        
+        // Clean up old text boxes if there are too many (performance optimization)
+        if (this.textBoxes.length > 20) {
+            const oldBox = this.textBoxes.shift();
+            this.cleanupTextBox(oldBox);
+        }
+    }
+    
+    cleanupTextBox(box) {
+        if (box.text) box.text.destroy();
+        if (box.gfx) box.gfx.destroy();
+        if (box.container) box.container.destroy();
+        if (box.tween) box.tween.stop();
+        if (box.particles) box.particles.destroy();
     }
 }
