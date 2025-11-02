@@ -30,8 +30,8 @@ export class MainMenu extends Scene
         
         // Add background image
         // this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'awesome hacker');
-        var player1 = this.add.image(window.innerWidth / 5, window.innerHeight - window.innerHeight / 3, 'wizard 1');
-        var player2 = this.add.image(window.innerWidth - window.innerWidth / 5, window.innerHeight - window.innerHeight / 3, 'wizard 1').setFlipX(true);
+        var player1 = this.add.image(window.innerWidth / 4, window.innerHeight - window.innerHeight / 3, 'wizard 1');
+        var player2 = this.add.image(window.innerWidth - window.innerWidth / 4, window.innerHeight - window.innerHeight / 3, 'wizard 1').setFlipX(true);
         player1.setScale(0.5);
         player2.setScale(0.5);
         // const tween = this.tweens.add({
@@ -64,7 +64,7 @@ export class MainMenu extends Scene
         this.currentDepth += 2;
         
         // Create the animated text box using the TextBoxCreator
-        const box = this.textBoxCreator.create(label, startPosition, this.currentDepth, {fireEffect: true});
+        const box = this.textBoxCreator.create(label, startPosition, this.currentDepth);
         
         // Store reference for cleanup
         this.textBoxes.push(box);

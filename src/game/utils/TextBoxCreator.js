@@ -17,7 +17,7 @@ export class TextBoxCreator {
      * @param {object} options - Optional configuration
      * @param {object} options.colors - Color configuration {text, background, border}
      * @param {Array<{x: number, y: number, duration?: number, rotation?: number}>} options.animationPath - Array of points defining the animation path. Each point can have optional duration (in ms) and rotation (in radians) for the transition to that point. If not provided, generates 2 random points.
-     * @param {boolean} options.fireEffect - Enable fire particle effects (default: false)
+     * @param {string} options.effect - Particle effect type: 'fire', 'ice', 'poison', 'smoke', or null (default: null)
      * @returns {object} - Returns {text, gfx, container, tween, particles}
      */
     create(label, startPosition, currentDepth, options = {}) {
@@ -72,10 +72,11 @@ export class TextBoxCreator {
         
         text.setDepth(currentDepth + 1);
         
-        // Create fire particle effect if enabled
+        // Create particle effect if specified
         let particles = null;
-        if (options.fireEffect) {
-            particles = this.createFireEffect(container, currentDepth - 1);
+        if (options.effect) {
+            particles = this.createParticleEffect(options.effect, container, currentDepth);
+            console.log(`${options.effect} particles created:`, particles);
         }
         
         // Animate the text box along the path
@@ -189,38 +190,150 @@ export class TextBoxCreator {
         animateToNextPoint();
     }
 
+    createParticleEffect(effectType, container, depth) {
+        const effectType_lower = effectType.toLowerCase();
+        
+        switch(effectType_lower) {
+            case 'fire':
+                return this.createFireEffect(container, depth);
+            case 'ice':
+                return this.createIceEffect(container, depth);
+            case 'poison':
+                return this.createPoisonEffect(container, depth);
+            case 'smoke':
+                return this.createSmokeEffect(container, depth);
+            default:
+                console.warn(`Unknown effect type: ${effectType}`);
+                return null;
+        }
+    }
+
     createFireEffect(container, depth) {
-        // Create a simple shape to use as particle texture (only if it doesn't exist)
-        if (!this.scene.textures.exists('fireParticle')) {
+        // Create fire particle texture
+        const textureName = 'fireParticle';
+        if (!this.scene.textures.exists(textureName)) {
             const particleGraphics = this.scene.add.graphics();
+            particleGraphics.fillStyle(0xff0000, 1);
+            particleGraphics.fillCircle(8, 8, 6);
             particleGraphics.fillStyle(0xff6600, 1);
-            particleGraphics.fillCircle(4, 4, 4);
-            particleGraphics.generateTexture('fireParticle', 8, 8);
+            particleGraphics.fillCircle(8, 8, 4);
+            particleGraphics.fillStyle(0xffaa00, 1);
+            particleGraphics.fillCircle(8, 8, 2);
+            particleGraphics.generateTexture(textureName, 16, 16);
             particleGraphics.destroy();
         }
         
-        // Create particle emitter for fire effect
-        const emitter = this.scene.add.particles(0, 0, 'fireParticle', {
-            speed: { min: 20, max: 50 },
-            angle: { min: 250, max: 290 }, // Upward direction
-            scale: { start: 0.8, end: 0 },
-            alpha: { start: 0.8, end: 0 },
-            lifespan: 800,
-            frequency: 40,
-            blendMode: 'ADD',
-            tint: [0xff6600, 0xff9900, 0xffcc00, 0xff3300],
-            emitZone: {
-                source: new Phaser.Geom.Rectangle(-40, 0, 80, 5),
-                type: 'edge',
-                quantity: 20
-            }
+        const emitter = this.scene.add.particles(0, 0, textureName, {
+            speed: { min: 40, max: 80 },
+            angle: { min: 250, max: 290 },
+            scale: { start: 2.5, end: 0.5 },
+            alpha: { start: 0.9, end: 0 },
+            lifespan: 1200,
+            frequency: 25,
+            quantity: 3,
+            blendMode: 'NORMAL',
+            tint: [0xcc0000, 0xff3300, 0xff6600, 0xff9900]
         });
         
-        emitter.setDepth(depth);
+        emitter.setDepth(depth - 1);
+        emitter.startFollow(container, 0, 30);
+        return emitter;
+    }
+
+    createIceEffect(container, depth) {
+        // Create ice particle texture
+        const textureName = 'iceParticle';
+        if (!this.scene.textures.exists(textureName)) {
+            const particleGraphics = this.scene.add.graphics();
+            particleGraphics.fillStyle(0x00ccff, 1);
+            particleGraphics.fillCircle(8, 8, 6);
+            particleGraphics.fillStyle(0xccffff, 1);
+            particleGraphics.fillCircle(8, 8, 4);
+            particleGraphics.fillStyle(0xffffff, 1);
+            particleGraphics.fillCircle(8, 8, 2);
+            particleGraphics.generateTexture(textureName, 16, 16);
+            particleGraphics.destroy();
+        }
         
-        // Make particles follow the container
-        emitter.startFollow(container);
+        const emitter = this.scene.add.particles(0, 0, textureName, {
+            speed: { min: 20, max: 50 },
+            angle: { min: 250, max: 290 },
+            scale: { start: 2, end: 0.3 },
+            alpha: { start: 0.9, end: 0 },
+            lifespan: 1500,
+            frequency: 30,
+            quantity: 2,
+            blendMode: 'NORMAL',
+            tint: [0x0099cc, 0x00ccff, 0x99ffff, 0xccffff],
+            gravityY: -50 // Ice crystals float up
+        });
         
+        emitter.setDepth(depth - 1);
+        emitter.startFollow(container, 0, 30);
+        return emitter;
+    }
+
+    createPoisonEffect(container, depth) {
+        // Create poison particle texture
+        const textureName = 'poisonParticle';
+        if (!this.scene.textures.exists(textureName)) {
+            const particleGraphics = this.scene.add.graphics();
+            particleGraphics.fillStyle(0x00cc00, 1);
+            particleGraphics.fillCircle(8, 8, 6);
+            particleGraphics.fillStyle(0x66ff33, 1);
+            particleGraphics.fillCircle(8, 8, 4);
+            particleGraphics.fillStyle(0xaaff66, 1);
+            particleGraphics.fillCircle(8, 8, 2);
+            particleGraphics.generateTexture(textureName, 16, 16);
+            particleGraphics.destroy();
+        }
+        
+        const emitter = this.scene.add.particles(0, 0, textureName, {
+            speed: { min: 10, max: 30 },
+            angle: { min: 0, max: 360 }, // All directions
+            scale: { start: 1.5, end: 0.3 },
+            alpha: { start: 0.8, end: 0 },
+            lifespan: 2000,
+            frequency: 40,
+            quantity: 2,
+            blendMode: 'NORMAL',
+            tint: [0x006600, 0x00cc00, 0x66ff33, 0x99ff66],
+            gravityY: -20 // Slow upward drift
+        });
+        
+        emitter.setDepth(depth - 1);
+        emitter.startFollow(container, 0, 0); // Center of box
+        return emitter;
+    }
+
+    createSmokeEffect(container, depth) {
+        // Create smoke particle texture
+        const textureName = 'smokeParticle';
+        if (!this.scene.textures.exists(textureName)) {
+            const particleGraphics = this.scene.add.graphics();
+            particleGraphics.fillStyle(0x666666, 1);
+            particleGraphics.fillCircle(8, 8, 6);
+            particleGraphics.fillStyle(0x999999, 1);
+            particleGraphics.fillCircle(8, 8, 4);
+            particleGraphics.generateTexture(textureName, 16, 16);
+            particleGraphics.destroy();
+        }
+        
+        const emitter = this.scene.add.particles(0, 0, textureName, {
+            speed: { min: 20, max: 40 },
+            angle: { min: 260, max: 280 },
+            scale: { start: 2, end: 3 }, // Grows as it rises
+            alpha: { start: 0.6, end: 0 },
+            lifespan: 2000,
+            frequency: 50,
+            quantity: 2,
+            blendMode: 'NORMAL',
+            tint: [0x444444, 0x666666, 0x888888, 0xaaaaaa],
+            gravityY: -30
+        });
+        
+        emitter.setDepth(depth - 1);
+        emitter.startFollow(container, 0, 30);
         return emitter;
     }
 }
