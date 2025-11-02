@@ -91,7 +91,7 @@ export class TextBoxCreator {
         // Animate the text box along the path
         const tween = this.animateTextBox(text, container, pathPoints);
         
-        return { text, gfx, container, tween: null, particles };
+        return { text, gfx, container, tween, particles };
     }
 
     calculateDimensions(label, fontSize = 28) {
@@ -147,19 +147,19 @@ export class TextBoxCreator {
     }
 
     animateTextBox(text, container, pathPoints) {
-        if (pathPoints.length === 0) return;
+        if (pathPoints.length === 0) return null;
         
-        // Phase 1: Emerge to the first point
-        this.scene.tweens.add({
+        // Phase 1: Emerge to the first point - slower for readability
+        const emergeTween = this.scene.tweens.add({
             targets: [text, container],
             x: pathPoints[0].x,
             y: pathPoints[0].y,
             scale: 1,
             alpha: 1,
-            duration: 800,
-            ease: 'Back.easeOut',
+            duration: pathPoints[0].duration || 1000,  // Use the duration from the path
+            ease: 'Power2',  // Smooth acceleration
             onComplete: () => {
-                // Phase 2: Animate through all path points in a loop
+                // Phase 2: Animate through remaining path points
                 if (pathPoints.length === 1) {
                     // If only one point, just stay there
                     return;
@@ -168,13 +168,22 @@ export class TextBoxCreator {
                 this.createPathAnimation(text, container, pathPoints);
             }
         });
+        
+        return emergeTween;
     }
 
     createPathAnimation(text, container, pathPoints) {
         let currentIndex = 0;
+        let lastTween = null;
         
         const animateToNextPoint = () => {
-            currentIndex = (currentIndex + 1) % pathPoints.length;
+            currentIndex++;
+            
+            // Stop if we've reached the end of the path (no looping)
+            if (currentIndex >= pathPoints.length) {
+                return; // Animation complete, stop here
+            }
+            
             const nextPoint = pathPoints[currentIndex];
             // Use custom duration if provided, otherwise random between 2-4 seconds
             const duration = nextPoint.duration ?? Phaser.Math.Between(2000, 4000);
@@ -184,7 +193,7 @@ export class TextBoxCreator {
                 x: nextPoint.x,
                 y: nextPoint.y,
                 duration: duration,
-                ease: 'Sine.easeInOut',
+                ease: 'Linear',  // Changed from Sine.easeInOut to Linear for constant velocity
                 onComplete: animateToNextPoint
             };
             
@@ -193,10 +202,11 @@ export class TextBoxCreator {
                 tweenConfig.angle = Phaser.Math.RadToDeg(nextPoint.rotation);
             }
             
-            this.scene.tweens.add(tweenConfig);
+            lastTween = this.scene.tweens.add(tweenConfig);
         };
         
         animateToNextPoint();
+        return lastTween;
     }
 
     createParticleEffect(effectType, container, depth) {

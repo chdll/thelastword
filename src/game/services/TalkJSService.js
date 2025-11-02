@@ -13,16 +13,24 @@ export class TalkJSService {
         this.lastMessageSenderId = null; // Track who sent the last message
         this.isMyTurn = true; // Start with it being the first player's turn
         this.turnChangeCallback = null; // Callback when turn changes
+        
+        // Health/HP system
+        this.myHealth = 100; // Current player's health
+        this.opponentHealth = 100; // Opponent's health
+        this.maxHealth = 100; // Maximum health for both players
+        this.healthChangeCallback = null; // Callback when health changes
     }
 
     /**
      * Initialize TalkJS session
      * @param {Function} onMessageReceived - Callback for when new messages arrive
      * @param {Function} onTurnChange - Optional callback for when turn changes (receives boolean isMyTurn)
+     * @param {Function} onHealthChange - Optional callback for when health changes (receives {myHealth, opponentHealth})
      */
-    async initialize(onMessageReceived, onTurnChange = null) {
+    async initialize(onMessageReceived, onTurnChange = null, onHealthChange = null) {
         this.messageCallback = onMessageReceived;
         this.turnChangeCallback = onTurnChange;
+        this.healthChangeCallback = onHealthChange;
 
         try {
             // Get user from URL parameter or default to alice
@@ -158,15 +166,24 @@ export class TalkJSService {
                 responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
-                    required: ["effect", "colors", "animationPath", "fontSize"],
+                    required: ["effect", "colors", "animationPath", "fontSize", "damage", "moveType"],
                     properties: {
+                        damage: {
+                            type: Type.NUMBER,
+                            description: "Damage dealt to opponent (0-50). 0 for defensive/neutral moves, 5-15 for normal attacks, 16-30 for strong attacks, 31-50 for ultimate attacks"
+                        },
+                        moveType: {
+                            type: Type.STRING,
+                            enum: ["attack", "defense", "neutral"],
+                            description: "Type of move: 'attack' shoots at opponent, 'defense' stays near caster, 'neutral' for non-combat"
+                        },
                         effect: {
                             type: Type.STRING,
                             description: "Particle effect type: 'fire', 'ice', 'poison', 'smoke', or null"
                         },  
                         fontSize: {
                             type: Type.NUMBER,
-                            description: "Font size in pixels."
+                            description: "Font size in pixels (18-60). Match to damage/intensity"
                         },
                         colors: {
                             type: Type.OBJECT,
@@ -187,14 +204,14 @@ export class TalkJSService {
                         },
                         animationPath: {
                             type: Type.ARRAY,
-                            description: "Array of animation waypoints",
+                            description: "Animation waypoints. For attacks: 2-3 points from caster to opponent. For defense: 1-2 points near caster. NOTE: Path coordinates will be auto-calculated based on moveType, but specify relative motion (straight line, arc, curve)",
                             items: {
                                 type: Type.OBJECT,
                                 properties: {
-                                    x: { type: Type.NUMBER, description: "X position (0-1920)" },
-                                    y: { type: Type.NUMBER, description: "Y position (0-1080)" },
-                                    duration: { type: Type.NUMBER, description: "Duration to reach this point in ms (500-3000)" },
-                                    rotation: { type: Type.NUMBER, description: "Rotation in radians (0 to 6.28)" }
+                                    x: { type: Type.NUMBER, description: "Relative X offset from start (-200 to 200 for variation)" },
+                                    y: { type: Type.NUMBER, description: "Relative Y offset from start (-200 to 200 for variation)" },
+                                    duration: { type: Type.NUMBER, description: "Duration to reach this point in ms (300-2000). Attacks should be fast (300-800ms), defenses slow (1000-2000ms)" },
+                                    rotation: { type: Type.NUMBER, description: "Rotation in radians (0 to 6.28). Use for spinning projectiles" }
                                 }
                             }
                         }
@@ -214,62 +231,150 @@ export class TalkJSService {
                 historyContext += '\nUse this history to:\n- Escalate intensity if battle is heating up\n- React to opponent\'s last move (counter fire with ice, etc.)\n- Build narrative progression (small attacks → bigger attacks)\n- Create combo effects when messages relate to previous ones\n- Match or exceed the energy level of recent exchanges\n';
             }
             
-            const prompt = `You are a creative game effects designer. Analyze the user's message and generate thematic visual effects for a text box animation.
+            const prompt = `You are a battle game AI analyzing messages in a PvP word-combat game. Players battle by typing messages that become attacks, defenses, or neutral actions.
 
-CRITICAL COLOR CONTRAST RULES:
-- ALWAYS ensure high contrast between text and background
-- Dark backgrounds (0x000000-0x888888) MUST use light text (#ffffff, #ffff00, #00ffff, etc.)
-- Light backgrounds (0x999999-0xffffff) MUST use dark text (#000000, #0f172a, #1a1a1a, etc.)
-- Never use similar brightness values for text and background
-- Test: Can you read white text on yellow? NO! Can you read black text on yellow? YES!
+GAME MECHANICS:
+- Players start with 100 HP
+- Messages can deal 0-50 damage to opponent
+- Attack moves shoot across screen from caster → opponent
+- Defense moves stay near the caster as shields/barriers
+- Neutral moves are non-combat (greetings, taunts with 0 damage)
 
-THEME RULES:
-1. Match the theme/mood (fire=hot/explosive, ice=cold/calm, poison=toxic, smoke=mysterious)
-2. Choose thematic colors WITH PROPER CONTRAST:
-   - Fire: Dark red/orange background (0xcc0000-0xff4500) + WHITE text (#ffffff)
-   - Ice: Dark blue background (0x0066cc-0x0099ff) + WHITE text (#ffffff)
-   - Poison: Dark green background (0x006600-0x00cc00) + WHITE or YELLOW text
-   - Smoke: Medium gray background (0x666666-0x999999) + BLACK or WHITE text
-   - Normal: White background (0xffffff) + DARK text (#0f172a)
-3. Animation paths match energy (fast/aggressive for attacks, slow/calm)
-4. Use effects sparingly - not every message needs effects
-5. Animation duration and intensity match mood
-6. Duration: 500-3000ms (faster=aggressive, slower=calm)
-7. Rotation: 0-6.28 radians (use sparingly)
-8. Font size matches mood
+MOVE TYPE CLASSIFICATION:
+1. **ATTACK** (moveType: "attack"): Offensive words that hurt opponent
+   - Examples: "fireball", "punch", "lightning bolt", "arrow", "EXPLOSION", "smash"
+   - Animation: Shoots from caster to opponent (straight line or arc)
+   - Damage: 5-50 based on intensity
+   - Speed: FAST (300-800ms total duration)
+
+2. **DEFENSE** (moveType: "defense"): Protective words that block/shield
+   - Examples: "ice wall", "shield", "barrier", "block", "protect", "dodge"
+   - Animation: Appears near caster, stays put or moves slightly
+   - Damage: 0 (defensive moves don't damage)
+   - Speed: SLOW (1000-2000ms, can be stationary)
+
+3. **NEUTRAL** (moveType: "neutral"): Non-combat messages
+   - Examples: "hello", "gg", "nice try", "...", "what?", "lol"
+   - Animation: Gentle drift, no target
+   - Damage: 0
+   - Speed: MEDIUM (1000-1500ms)
+
+DAMAGE CALCULATION GUIDE:
+- 0: Defensive/neutral moves, greetings, non-attacks
+- 5-10: Weak attacks (poke, tap, small fire)
+- 11-20: Normal attacks (punch, fireball, ice shard)
+- 21-35: Strong attacks (SMASH, EXPLOSION, lightning)
+- 36-50: Ultimate/max attacks (NUCLEAR, ANNIHILATION, all caps with !!!)
+
+ANIMATION PATH RULES:
+- Specify RELATIVE offsets (will be calculated to actual screen positions)
+- Attacks: Use 2-3 waypoints for projectile trajectory
+  * Straight shot: [{x:0, y:0}, {x:0, y:0}] (goes straight to target)
+  * Arc shot: [{x:0, y:-100}, {x:0, y:0}] (arcs up then to target)
+  * Curve: [{x:50, y:-50}, {x:0, y:0}] (slight curve)
+- Defense: 1-2 waypoints near origin
+  * Shield: [{x:0, y:0}] (stays at caster)
+  * Floating barrier: [{x:0, y:-30}, {x:0, y:30}] (bobs up/down)
+- Rotation: Use for spinning (fireballs, shurikens), 0 for no spin
+
+DURATION RULES (CRITICAL FOR REALISM):
+- Attacks should be FAST: 300-800ms total (feels like impact)
+- Defenses can be slower: 1000-2000ms (shields appear calmly)
+- NO easing - use linear motion for physics-like feel
+- Faster = more aggressive
+
+COLOR CONTRAST (MUST FOLLOW):
+- Dark backgrounds (0x000000-0x888888) → Light text (#ffffff, #ffff00)
+- Light backgrounds (0x999999-0xffffff) → Dark text (#000000, #0f172a)
 
 EXAMPLES:
 
-Message: "fireball"
-Response: {"effect":"fire","fontSize":36,"colors":{"text":"#ffffff","background":13369344,"border":10027008},"animationPath":[{"x":400,"y":400,"duration":800,"rotation":0},{"x":1500,"y":400,"duration":1200,"rotation":3.14}]}
+Message: "fireball!"
+{
+  "damage": 15,
+  "moveType": "attack",
+  "effect": "fire",
+  "fontSize": 32,
+  "colors": {"text": "#ffffff", "background": 13369344, "border": 10027008},
+  "animationPath": [
+    {"x": 0, "y": -50, "duration": 300, "rotation": 2},
+    {"x": 0, "y": 0, "duration": 500, "rotation": 6.28}
+  ]
+}
 
-Message: "ice shard"
-Response: {"effect":"ice","fontSize":30,"colors":{"text":"#ffffff","background":52479,"border":39423},"animationPath":[{"x":960,"y":300,"duration":1500,"rotation":0},{"x":960,"y":600,"duration":2000,"rotation":0.5}]}
+Message: "ice wall"
+{
+  "damage": 0,
+  "moveType": "defense",
+  "effect": "ice",
+  "fontSize": 36,
+  "colors": {"text": "#ffffff", "background": 52479, "border": 39423},
+  "animationPath": [
+    {"x": 0, "y": 0, "duration": 1000, "rotation": 0}
+  ]
+}
 
-Message: "hello there"
-Response: {"effect":null,"fontSize":28,"colors":{"text":"#0f172a","background":16777215,"border":15132395},"animationPath":[{"x":500,"y":400,"duration":2000,"rotation":0},{"x":1400,"y":400,"duration":2500,"rotation":0}]}
+Message: "MEGA BLAST!!!"
+{
+  "damage": 40,
+  "moveType": "attack",
+  "effect": "fire",
+  "fontSize": 48,
+  "colors": {"text": "#ffff00", "background": 10027008, "border": 6684672},
+  "animationPath": [
+    {"x": 0, "y": 0, "duration": 400, "rotation": 0}
+  ]
+}
 
-Message: "EXPLOSION!!!"
-Response: {"effect":"fire","fontSize":48,"colors":{"text":"#ffff00","background":10027008,"border":6684672},"animationPath":[{"x":960,"y":540,"duration":500,"rotation":0},{"x":960,"y":540,"duration":100,"rotation":6.28}]}
+Message: "hello"
+{
+  "damage": 0,
+  "moveType": "neutral",
+  "effect": null,
+  "fontSize": 24,
+  "colors": {"text": "#0f172a", "background": 16777215, "border": 15132395},
+  "animationPath": [
+    {"x": 100, "y": 0, "duration": 1500, "rotation": 0}
+  ]
+}
 
-Message: "whisper"
-Response: {"effect":"smoke","fontSize":22,"colors":{"text":"#000000","background":13421772,"border":10066329},"animationPath":[{"x":800,"y":400,"duration":3000,"rotation":0},{"x":1100,"y":450,"duration":3000,"rotation":0}]}
+Message: "poison cloud"
+{
+  "damage": 12,
+  "moveType": "attack",
+  "effect": "poison",
+  "fontSize": 30,
+  "colors": {"text": "#ffff00", "background": 26112, "border": 13056},
+  "animationPath": [
+    {"x": 0, "y": 30, "duration": 600, "rotation": 1}
+  ]
+}
 
-Message: "toxic"
-Response: {"effect":"poison","fontSize":32,"colors":{"text":"#ffff00","background":26112,"border":13056},"animationPath":[{"x":700,"y":400,"duration":1500,"rotation":0},{"x":1200,"y":500,"duration":1800,"rotation":1.57}]}
-
-BATTLE CONTEXT GUIDELINES:
-- If conversation shows escalation (slap → punch → fireball), make THIS message even MORE intense
-- Counter opponent's element (they used fire? Use ice/water themed response)
-- First attacks should be small/simple, later attacks larger/more complex
-- Match the combat pace: fast exchanges = shorter durations, epic moments = slower dramatic animations
-- Create visual storytelling: defensive moves use shields/barriers, aggressive moves use strikes/projectiles
+Message: "shield up!"
+{
+  "damage": 0,
+  "moveType": "defense",
+  "effect": null,
+  "fontSize": 28,
+  "colors": {"text": "#ffffff", "background": 3355443, "border": 2236962},
+  "animationPath": [
+    {"x": 0, "y": -20, "duration": 1200, "rotation": 0},
+    {"x": 0, "y": 20, "duration": 1200, "rotation": 0}
+  ]
+}
 ${historyContext}
 
-Now analyze this message and generate appropriate effects:
-Message: "${message}"
+Now analyze this message:
+"${message}"
 
-Return ONLY valid JSON matching the schema.`;
+Determine:
+1. Is it an ATTACK, DEFENSE, or NEUTRAL move?
+2. How much damage (0-50)?
+3. What visual effects match the theme?
+4. Fast aggressive animation or slow defensive one?
+
+Return ONLY valid JSON.`;
+
 
             const contents = [
                 {
@@ -302,8 +407,10 @@ Return ONLY valid JSON matching the schema.`;
             
         } catch (error) {
             console.error('Error processing message through Gemini API:', error);
-            // Fallback to a default response structure if API fails
+            // Fallback to a neutral move with no damage if API fails
             return {
+                damage: 0,
+                moveType: 'neutral',
                 effect: null,
                 fontSize: 28,
                 colors: {
@@ -312,8 +419,7 @@ Return ONLY valid JSON matching the schema.`;
                     border: 0xe5e7eb
                 },
                 animationPath: [
-                    { x: 500, y: 400, duration: 2000, rotation: 0 },
-                    { x: 1400, y: 400, duration: 2500, rotation: 0 }
+                    { x: 0, y: 0, duration: 1500, rotation: 0 }
                 ]
             };
         }
@@ -399,5 +505,91 @@ Return ONLY valid JSON matching the schema.`;
             isMyTurn: this.isMyTurn,
             turnMessage: this.isMyTurn ? 'Your turn' : 'Waiting for opponent...'
         };
+    }
+
+    /**
+     * Deal damage to a player
+     * @param {number} damage - Amount of damage to deal
+     * @param {boolean} toOpponent - True to damage opponent, false to damage self
+     */
+    dealDamage(damage, toOpponent = true) {
+        if (toOpponent) {
+            this.opponentHealth = Math.max(0, this.opponentHealth - damage);
+        } else {
+            this.myHealth = Math.max(0, this.myHealth - damage);
+        }
+
+        // Notify health change
+        if (this.healthChangeCallback) {
+            this.healthChangeCallback({
+                myHealth: this.myHealth,
+                opponentHealth: this.opponentHealth,
+                maxHealth: this.maxHealth
+            });
+        }
+
+        // Check for game over
+        if (this.myHealth <= 0 || this.opponentHealth <= 0) {
+            this.onGameOver();
+        }
+    }
+
+    /**
+     * Heal a player
+     * @param {number} amount - Amount to heal
+     * @param {boolean} self - True to heal self, false to heal opponent
+     */
+    heal(amount, self = true) {
+        if (self) {
+            this.myHealth = Math.min(this.maxHealth, this.myHealth + amount);
+        } else {
+            this.opponentHealth = Math.min(this.maxHealth, this.opponentHealth + amount);
+        }
+
+        // Notify health change
+        if (this.healthChangeCallback) {
+            this.healthChangeCallback({
+                myHealth: this.myHealth,
+                opponentHealth: this.opponentHealth,
+                maxHealth: this.maxHealth
+            });
+        }
+    }
+
+    /**
+     * Get current health values
+     * @returns {Object} - Object with myHealth, opponentHealth, and maxHealth
+     */
+    getHealth() {
+        return {
+            myHealth: this.myHealth,
+            opponentHealth: this.opponentHealth,
+            maxHealth: this.maxHealth
+        };
+    }
+
+    /**
+     * Reset health for both players
+     */
+    resetHealth() {
+        this.myHealth = this.maxHealth;
+        this.opponentHealth = this.maxHealth;
+
+        if (this.healthChangeCallback) {
+            this.healthChangeCallback({
+                myHealth: this.myHealth,
+                opponentHealth: this.opponentHealth,
+                maxHealth: this.maxHealth
+            });
+        }
+    }
+
+    /**
+     * Handle game over logic
+     */
+    onGameOver() {
+        const winner = this.myHealth > 0 ? 'You' : 'Opponent';
+        console.log(`Game Over! ${winner} won!`);
+        // You can add more game over logic here
     }
 }
