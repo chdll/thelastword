@@ -6,6 +6,8 @@ export class TalkJSService {
         this.conversation = null;
         this.processedMessages = new Set();
         this.messageCallback = null;
+        this.conversationHistory = []; // Store recent messages for context
+        this.maxHistoryLength = 10; // Keep last 10 messages for context
     }
 
     /**
@@ -66,6 +68,18 @@ export class TalkJSService {
                         this.processedMessages.add(m.id);
                         const senderName = m.sender?.name || 'System';
                         const messageText = `${senderName}: ${m.plaintext}`;
+                        
+                        // Store in conversation history for context
+                        this.conversationHistory.push({
+                            sender: senderName,
+                            text: m.plaintext,
+                            timestamp: m.timestamp || Date.now()
+                        });
+                        
+                        // Keep only recent messages
+                        if (this.conversationHistory.length > this.maxHistoryLength) {
+                            this.conversationHistory.shift();
+                        }
                         
                         // Extract effects data from custom field if present
                         let effectsData = null;
@@ -168,6 +182,16 @@ export class TalkJSService {
             
             const model = 'gemini-flash-lite-latest';
             
+            // Build conversation history context
+            let historyContext = '';
+            if (this.conversationHistory.length > 0) {
+                historyContext = '\n\nRECENT CONVERSATION HISTORY (use this to create dynamic, escalating battles):\n';
+                this.conversationHistory.slice(-8).forEach(msg => {
+                    historyContext += `${msg.sender}: ${msg.text}\n`;
+                });
+                historyContext += '\nUse this history to:\n- Escalate intensity if battle is heating up\n- React to opponent\'s last move (counter fire with ice, etc.)\n- Build narrative progression (small attacks → bigger attacks)\n- Create combo effects when messages relate to previous ones\n- Match or exceed the energy level of recent exchanges\n';
+            }
+            
             const prompt = `You are a creative game effects designer. Analyze the user's message and generate thematic visual effects for a text box animation.
 
 CRITICAL COLOR CONTRAST RULES:
@@ -211,6 +235,14 @@ Response: {"effect":"smoke","fontSize":22,"colors":{"text":"#000000","background
 
 Message: "toxic"
 Response: {"effect":"poison","fontSize":32,"colors":{"text":"#ffff00","background":26112,"border":13056},"animationPath":[{"x":700,"y":400,"duration":1500,"rotation":0},{"x":1200,"y":500,"duration":1800,"rotation":1.57}]}
+
+BATTLE CONTEXT GUIDELINES:
+- If conversation shows escalation (slap → punch → fireball), make THIS message even MORE intense
+- Counter opponent's element (they used fire? Use ice/water themed response)
+- First attacks should be small/simple, later attacks larger/more complex
+- Match the combat pace: fast exchanges = shorter durations, epic moments = slower dramatic animations
+- Create visual storytelling: defensive moves use shields/barriers, aggressive moves use strikes/projectiles
+${historyContext}
 
 Now analyze this message and generate appropriate effects:
 Message: "${message}"
