@@ -127,10 +127,10 @@ export class TalkJSService {
                         effect: {
                             type: Type.STRING,
                             description: "Particle effect type: 'fire', 'ice', 'poison', 'smoke', or null"
-                        },
+                        },  
                         fontSize: {
                             type: Type.NUMBER,
-                            description: "Font size in pixels (16-48). Small words: 20-24, normal: 26-30, emphasis: 32-40, huge impact: 42-48"
+                            description: "Font size in pixels."
                         },
                         colors: {
                             type: Type.OBJECT,
@@ -170,24 +170,32 @@ export class TalkJSService {
             
             const prompt = `You are a creative game effects designer. Analyze the user's message and generate thematic visual effects for a text box animation.
 
-IMPORTANT RULES:
-1. Match the theme/mood of the message (fire for hot/explosive words, ice for cold/calm, poison for toxic/negative, smoke for mysterious)
-2. Choose colors that enhance the theme (fire = reds/oranges, ice = blues/cyans, poison = greens, smoke = grays). Ensure text color contrasts well with background color of the text box.
-3. Create animation paths that match the energy (fast/aggressive for attacks, slow/flowing for calm, erratic for chaos)
-4. Use effects sparingly - only when truly thematic. Many messages won't need special effects.
-5. Animation coordinates: x (200-1700), y (200-800) for safe visibility
-6. Duration: 500-3000ms per waypoint (faster for aggressive, slower for calm)
-7. Rotation: 0 (no rotation) to 6.28 (full rotation) - use sparingly
-8. Font size based on impact/importance:
-   - Small/whisper: 20-24px
-   - Normal conversation: 26-30px (default: 28px)
-   - Emphasis/shout: 32-40px
-   - HUGE impact/explosion: 42-48px
+CRITICAL COLOR CONTRAST RULES:
+- ALWAYS ensure high contrast between text and background
+- Dark backgrounds (0x000000-0x888888) MUST use light text (#ffffff, #ffff00, #00ffff, etc.)
+- Light backgrounds (0x999999-0xffffff) MUST use dark text (#000000, #0f172a, #1a1a1a, etc.)
+- Never use similar brightness values for text and background
+- Test: Can you read white text on yellow? NO! Can you read black text on yellow? YES!
+
+THEME RULES:
+1. Match the theme/mood (fire=hot/explosive, ice=cold/calm, poison=toxic, smoke=mysterious)
+2. Choose thematic colors WITH PROPER CONTRAST:
+   - Fire: Dark red/orange background (0xcc0000-0xff4500) + WHITE text (#ffffff)
+   - Ice: Dark blue background (0x0066cc-0x0099ff) + WHITE text (#ffffff)
+   - Poison: Dark green background (0x006600-0x00cc00) + WHITE or YELLOW text
+   - Smoke: Medium gray background (0x666666-0x999999) + BLACK or WHITE text
+   - Normal: White background (0xffffff) + DARK text (#0f172a)
+3. Animation paths match energy (fast/aggressive for attacks, slow/calm)
+4. Use effects sparingly - not every message needs effects
+5. Animation duration and intensity match mood
+6. Duration: 500-3000ms (faster=aggressive, slower=calm)
+7. Rotation: 0-6.28 radians (use sparingly)
+8. Font size matches mood
 
 EXAMPLES:
 
 Message: "fireball"
-Response: {"effect":"fire","fontSize":36,"colors":{"text":"#ffffff","background":16711680,"border":13369344},"animationPath":[{"x":400,"y":400,"duration":800,"rotation":0},{"x":1500,"y":400,"duration":1200,"rotation":3.14}]}
+Response: {"effect":"fire","fontSize":36,"colors":{"text":"#ffffff","background":13369344,"border":10027008},"animationPath":[{"x":400,"y":400,"duration":800,"rotation":0},{"x":1500,"y":400,"duration":1200,"rotation":3.14}]}
 
 Message: "ice shard"
 Response: {"effect":"ice","fontSize":30,"colors":{"text":"#ffffff","background":52479,"border":39423},"animationPath":[{"x":960,"y":300,"duration":1500,"rotation":0},{"x":960,"y":600,"duration":2000,"rotation":0.5}]}
@@ -196,10 +204,13 @@ Message: "hello there"
 Response: {"effect":null,"fontSize":28,"colors":{"text":"#0f172a","background":16777215,"border":15132395},"animationPath":[{"x":500,"y":400,"duration":2000,"rotation":0},{"x":1400,"y":400,"duration":2500,"rotation":0}]}
 
 Message: "EXPLOSION!!!"
-Response: {"effect":"fire","fontSize":48,"colors":{"text":"#ffff00","background":16711680,"border":13369344},"animationPath":[{"x":960,"y":540,"duration":500,"rotation":0},{"x":960,"y":540,"duration":100,"rotation":6.28}]}
+Response: {"effect":"fire","fontSize":48,"colors":{"text":"#ffff00","background":10027008,"border":6684672},"animationPath":[{"x":960,"y":540,"duration":500,"rotation":0},{"x":960,"y":540,"duration":100,"rotation":6.28}]}
 
 Message: "whisper"
-Response: {"effect":"smoke","fontSize":22,"colors":{"text":"#888888","background":15132390,"border":13421772},"animationPath":[{"x":800,"y":400,"duration":3000,"rotation":0},{"x":1100,"y":450,"duration":3000,"rotation":0}]}
+Response: {"effect":"smoke","fontSize":22,"colors":{"text":"#000000","background":13421772,"border":10066329},"animationPath":[{"x":800,"y":400,"duration":3000,"rotation":0},{"x":1100,"y":450,"duration":3000,"rotation":0}]}
+
+Message: "toxic"
+Response: {"effect":"poison","fontSize":32,"colors":{"text":"#ffff00","background":26112,"border":13056},"animationPath":[{"x":700,"y":400,"duration":1500,"rotation":0},{"x":1200,"y":500,"duration":1800,"rotation":1.57}]}
 
 Now analyze this message and generate appropriate effects:
 Message: "${message}"

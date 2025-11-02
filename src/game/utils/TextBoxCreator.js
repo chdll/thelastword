@@ -54,12 +54,17 @@ export class TextBoxCreator {
         // Get text color from options or use default
         const textColor = options.colors?.text ?? '#0f172a';
         
-        // Create text element with dynamic font size
+        // Determine stroke color based on text brightness for extra contrast
+        const strokeColor = this.getContrastingStroke(textColor);
+        
+        // Create text element with dynamic font size and stroke for readability
         const text = this.scene.add.text(startPosition.x, startPosition.y, label, {
             fontFamily: 'Arial, Helvetica, sans-serif',
             fontSize: `${fontSize}px`,
             color: textColor,
             align: 'center',
+            stroke: strokeColor,
+            strokeThickness: 4
         }).setOrigin(0.5);
         
         text.setScale(0);
@@ -346,5 +351,23 @@ export class TextBoxCreator {
         emitter.setDepth(depth - 1);
         emitter.startFollow(container, 0, 30);
         return emitter;
+    }
+
+    /**
+     * Get contrasting stroke color for text readability
+     * Light text gets dark stroke, dark text gets light stroke
+     */
+    getContrastingStroke(textColor) {
+        // Convert hex to RGB
+        const hex = textColor.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        
+        // Calculate perceived brightness (0-255)
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        
+        // If text is bright, use dark stroke; if dark, use light stroke
+        return brightness > 128 ? '#000000' : '#ffffff';
     }
 }
