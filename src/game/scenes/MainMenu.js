@@ -29,10 +29,6 @@ export class MainMenu extends Scene
         // Add background image
         this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'awesome hacker');
         
-        // Create static text box example
-        const centerX = window.innerWidth / 2 - 100;
-        const centerY = window.innerHeight / 2 + 200;
-        this.uiManager.createStaticTextBox(centerX, centerY, 'awesome hacker');
         
         // Create input box
         this.uiManager.createInputBox((message) => {
