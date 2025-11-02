@@ -81,6 +81,7 @@ export class TalkJSService {
                         // Extract effects data to track positions
                         let effectsData = null;
                         let positionInfo = null;
+                        let spellType = null;
                         if (m.custom && m.custom.effects) {
                             try {
                                 effectsData = JSON.parse(m.custom.effects);
@@ -98,13 +99,17 @@ export class TalkJSService {
                             }
                         }
                         
-                        // Store in conversation history for context with position data
+                        // Detect spell type from message text for interactions
+                        spellType = this.detectSpellType(m.plaintext);
+                        
+                        // Store in conversation history for context with position and spell data
                         this.conversationHistory.push({
                             sender: senderName,
                             text: m.plaintext,
                             timestamp: m.timestamp || Date.now(),
                             position: positionInfo,
-                            hasParticles: effectsData?.particles !== undefined
+                            hasParticles: effectsData?.particles !== undefined,
+                            spellType: spellType
                         });
                         
                         // Keep only recent messages
@@ -261,24 +266,26 @@ export class TalkJSService {
                 recentHistory.forEach((msg, index) => {
                     const posInfo = msg.position ? ` [Position: ${msg.position.zone} (${msg.position.x},${msg.position.y})]` : '';
                     const particleInfo = msg.hasParticles ? ' [HAS PARTICLES]' : ' [NO PARTICLES]';
-                    historyContext += `[${index + 1}] ${msg.sender}: "${msg.text}"${posInfo}${particleInfo}\n`;
+                    const spellInfo = msg.spellType ? ` [SPELL: ${msg.spellType.toUpperCase()}]` : '';
+                    historyContext += `[${index + 1}] ${msg.sender}: "${msg.text}"${spellInfo}${posInfo}${particleInfo}\n`;
                 });
                 
-                // Analyze battle progression
+                // Analyze battle progression and spell interactions
                 const attackKeywords = ['fire', 'ice', 'attack', 'strike', 'blast', 'explosion', 'punch', 'kick', 'shoot', 'throw', 'slash'];
                 const defenseKeywords = ['block', 'shield', 'dodge', 'defend', 'counter', 'parry', 'reflect'];
                 
                 let attackCount = 0;
-                let lastAttackType = null;
+                let lastSpell = null;
+                const recentSpells = [];
+                
                 recentHistory.forEach(msg => {
                     const text = msg.text.toLowerCase();
                     if (attackKeywords.some(kw => text.includes(kw))) {
                         attackCount++;
-                        // Detect element type from last attack
-                        if (text.includes('fire') || text.includes('flame') || text.includes('burn')) lastAttackType = 'fire';
-                        else if (text.includes('ice') || text.includes('freeze') || text.includes('frost')) lastAttackType = 'ice';
-                        else if (text.includes('poison') || text.includes('toxic') || text.includes('venom')) lastAttackType = 'poison';
-                        else if (text.includes('lightning') || text.includes('thunder') || text.includes('electric')) lastAttackType = 'electric';
+                    }
+                    if (msg.spellType) {
+                        lastSpell = msg.spellType;
+                        recentSpells.push({type: msg.spellType, sender: msg.sender});
                     }
                 });
                 
@@ -296,10 +303,28 @@ export class TalkJSService {
                 
                 historyContext += '\n=== BATTLE CONTEXT ANALYSIS ===\n';
                 historyContext += `- Battle Intensity: ${attackCount < 2 ? 'LOW (early game)' : attackCount < 4 ? 'MEDIUM (heating up)' : 'HIGH (intense battle)'}\n`;
-                if (lastAttackType) {
-                    historyContext += `- Last Element Used: ${lastAttackType.toUpperCase()} (consider counter-element)\n`;
-                }
                 historyContext += `- Message Count: ${recentHistory.length} (more messages = more escalation needed)\n`;
+                
+                // Spell interaction opportunities
+                if (lastSpell) {
+                    historyContext += `- Last Spell Used: ${lastSpell.toUpperCase()}\n`;
+                    
+                    // Suggest interaction opportunities
+                    const interactions = this.getSpellInteraction(lastSpell);
+                    if (interactions.counters.length > 0) {
+                        historyContext += `- COUNTER SPELLS: ${interactions.counters.join(', ')} (strong against ${lastSpell})\n`;
+                    }
+                    if (interactions.amplifies.length > 0) {
+                        historyContext += `- AMPLIFY WITH: ${interactions.amplifies.join(', ')} (combo with ${lastSpell})\n`;
+                    }
+                    if (interactions.neutralizes.length > 0) {
+                        historyContext += `- NEUTRALIZE WITH: ${interactions.neutralizes.join(', ')} (cancels ${lastSpell})\n`;
+                    }
+                }
+                
+                if (recentSpells.length >= 2) {
+                    historyContext += `- Recent Spell Chain: ${recentSpells.slice(-3).map(s => s.type).join(' → ')}\n`;
+                }
                 
                 if (recentPositions.length > 0) {
                     historyContext += `- Recent Positions Used: ${recentPositions.map(m => m.position.zone).join(', ')}\n`;
@@ -339,11 +364,40 @@ PARTICLE RULES (when included):
 - Frequency: 20-100ms
 - Quantity: 1-5 particles per emission
 
+SPELL INTERACTION SYSTEM:
+When opponent's last spell is detected, CREATE VISUAL INTERACTIONS:
+
+1. COUNTER INTERACTIONS (Strong Against):
+   - Fire vs Ice/Water: Use blue particles, show "extinguishing" effect (particles fade quickly)
+   - Ice vs Fire: Red/orange melting particles, faster lifespan (ice melts)
+   - Water vs Fire: Steam effect (white particles, upward), neutralizing colors
+   - Lightning vs Earth: Particles stop/dissipate at ground (grounded)
+   - Holy vs Dark/Poison: Bright purifying particles, expanding light
+   - Wind vs Poison: Dispersing effect (particles scatter wide, angle 0-360)
+
+2. AMPLIFY INTERACTIONS (Combo Effects):
+   - Fire + Wind: MORE particles, faster speed, wider spread (wildfire)
+   - Ice + Water: Larger particles, blue-white gradient (frozen waves)
+   - Lightning + Water: Branching effect, cyan particles, erratic angles
+   - Fire + Earth: Orange-brown particles (lava/magma)
+   - Wind + Ice: Many small particles, wide angle (blizzard)
+   - Dark + Poison: Purple-green mix, ominous slow particles
+
+3. VISUAL INDICATORS FOR INTERACTIONS:
+   - Counter spells: Use opponent's spell colors BUT transition to your color
+   - Amplify spells: Mix BOTH spell colors in particle array
+   - Neutralize: Particles meet in middle, fade together (angle toward previous spell position)
+
 THEME GUIDELINES:
-- Fire: Red/orange particles (0xcc0000, 0xff4500, 0xff9900), upward angle 250-290
-- Ice: Blue/white particles (0x0099ff, 0x66ccff, 0xffffff), downward or outward
-- Poison: Green/yellow particles (0x00cc00, 0x66ff00, 0xffff00), bubbling effect
-- Energy: Bright particles (0xffff00, 0x00ffff, 0xff00ff), fast speed
+- Fire: Red/orange (0xcc0000, 0xff4500, 0xff9900), upward 250-290
+- Ice: Blue/white (0x0099ff, 0x66ccff, 0xffffff), downward 80-100
+- Water: Blue/cyan (0x0066cc, 0x0099ff, 0x00ccff), wave-like 170-190
+- Lightning: Yellow/cyan (0xffff00, 0x00ffff, 0xffcc00), erratic 0-360
+- Earth: Brown/orange (0x996600, 0xcc6600, 0xff9933), heavy down 260-280
+- Wind: White/gray (0xcccccc, 0xeeeeee, 0xffffff), sweeping 0-360
+- Poison: Green/yellow (0x00cc00, 0x66ff00, 0xffff00), bubbling 260-280
+- Holy: White/gold (0xffffff, 0xffff99, 0xffcc00), radiating 0-360
+- Dark: Purple/black (0x330033, 0x660066, 0x220022), ominous 250-290
 - Simple messages: NO particles
 
 EXAMPLES:
@@ -365,6 +419,24 @@ Response: {"fontSize":22,"colors":{"text":"#000000","background":0xcccccc,"borde
 
 Message: "poison cloud"
 Response: {"fontSize":30,"colors":{"text":"#ffffff","background":0x009900,"border":0x006600},"animationPath":[{"x":700,"y":400,"duration":1800},{"x":1200,"y":500,"duration":2000}],"particles":{"colors":[0x00cc00,0x66ff00,0x99ff33],"speed":{"min":25,"max":50},"angle":{"min":260,"max":280},"scale":{"start":2,"end":3},"lifespan":1800,"frequency":50,"quantity":2}}
+
+SPELL INTERACTION EXAMPLES:
+
+After opponent's "fireball":
+Message: "ice shield" (COUNTER)
+Response: {"fontSize":34,"colors":{"text":"#ffffff","background":0x0066cc,"border":0x004499},"animationPath":[{"x":800,"y":450,"duration":1500}],"particles":{"colors":[0xff6600,0x0099ff,0x66ccff,0xffffff],"speed":{"min":40,"max":70},"angle":{"min":80,"max":100},"scale":{"start":2.5,"end":0},"lifespan":1000,"frequency":30,"quantity":3}}
+
+After opponent's "fire wave":
+Message: "wind gust" (AMPLIFY - spreads fire)
+Response: {"fontSize":36,"colors":{"text":"#ffffff","background":0xcc3300,"border":0x993300},"animationPath":[{"x":600,"y":400,"duration":1000},{"x":1300,"y":450,"duration":1200}],"particles":{"colors":[0xff3300,0xff6600,0xeeeeee,0xffffff],"speed":{"min":70,"max":130},"angle":{"min":0,"max":360},"scale":{"start":2,"end":0.5},"lifespan":900,"frequency":25,"quantity":4}}
+
+After opponent's "lightning bolt":
+Message: "water wave" (AMPLIFY - conducts electricity)
+Response: {"fontSize":38,"colors":{"text":"#ffffff","background":0x0066cc,"border":0x004499},"animationPath":[{"x":500,"y":500,"duration":1200},{"x":1400,"y":500,"duration":1500}],"particles":{"colors":[0x0099ff,0x00ccff,0xffff00,0x00ffff],"speed":{"min":50,"max":90},"angle":{"min":160,"max":200},"scale":{"start":2.5,"end":0.5},"lifespan":1300,"frequency":25,"quantity":4}}
+
+After opponent's "poison gas":
+Message: "holy light" (COUNTER - purifies)
+Response: {"fontSize":40,"colors":{"text":"#000000","background":0xffff99,"border":0xffcc00},"animationPath":[{"x":960,"y":540,"duration":1800}],"particles":{"colors":[0x66ff00,0xffff99,0xffffff,0xffcc00],"speed":{"min":30,"max":60},"angle":{"min":0,"max":360},"scale":{"start":3,"end":0},"lifespan":1500,"frequency":30,"quantity":4}}
 
 CRITICAL: AVOID OVERLAPPING EFFECTS
 - Spread effects across screen (vary X positions: left=200-600, center=700-1200, right=1300-1720)
@@ -553,5 +625,100 @@ Return ONLY valid JSON matching the schema.`;
         else if (y > 700) vertical = 'bottom';
         
         return `${horizontal}-${vertical}`;
+    }
+
+    /**
+     * Get spell interaction rules for a given spell type
+     * @param {string} spellType - The spell type to check interactions for
+     * @returns {Object} - Object with counters, amplifies, and neutralizes arrays
+     */
+    getSpellInteraction(spellType) {
+        const interactions = {
+            fire: {
+                counters: ['water', 'ice'],           // Water/ice beats fire
+                amplifies: ['wind', 'earth'],         // Wind spreads fire, earth creates lava
+                neutralizes: ['water']                // Water cancels fire
+            },
+            ice: {
+                counters: ['fire'],                   // Fire melts ice
+                amplifies: ['water', 'wind'],         // Water freezes more, wind creates blizzard
+                neutralizes: ['fire']                 // Fire melts ice completely
+            },
+            water: {
+                counters: ['fire', 'earth'],          // Extinguishes fire, erodes earth
+                amplifies: ['ice', 'lightning'],      // Freezes or conducts electricity
+                neutralizes: ['fire']                 // Cancels fire
+            },
+            lightning: {
+                counters: ['water', 'wind'],          // Conducts through water, rides wind
+                amplifies: ['water'],                 // Water conducts electricity
+                neutralizes: ['earth']                // Earth grounds lightning
+            },
+            earth: {
+                counters: ['wind', 'lightning'],      // Blocks wind, grounds lightning
+                amplifies: ['fire'],                  // Creates lava/magma
+                neutralizes: ['lightning', 'poison']  // Grounds electricity, absorbs poison
+            },
+            wind: {
+                counters: ['earth'],                  // Earth blocks wind
+                amplifies: ['fire', 'ice'],           // Spreads flames, creates blizzard
+                neutralizes: ['poison']               // Blows away poison
+            },
+            poison: {
+                counters: ['holy', 'wind'],           // Holy purifies, wind disperses
+                amplifies: ['water', 'dark'],         // Spreads in water, empowered by dark
+                neutralizes: ['holy', 'earth']        // Holy cleanses, earth absorbs
+            },
+            holy: {
+                counters: ['dark', 'poison'],         // Light defeats darkness, purifies poison
+                amplifies: ['fire'],                  // Sacred flames
+                neutralizes: ['dark', 'poison']       // Purifies corruption
+            },
+            dark: {
+                counters: ['holy'],                   // Darkness defeated by light
+                amplifies: ['poison'],                // Empowers corruption
+                neutralizes: ['holy']                 // Shadows consume light
+            }
+        };
+        
+        return interactions[spellType] || { counters: [], amplifies: [], neutralizes: [] };
+    }
+
+    /**
+     * Detect spell type from message text for interaction system
+     * @param {string} text - Message text to analyze
+     * @returns {string|null} - Detected spell type or null
+     */
+    detectSpellType(text) {
+        const lowerText = text.toLowerCase();
+        
+        // Fire spells
+        if (lowerText.match(/fire|flame|burn|fireball|inferno|blaze|heat|scorch/)) return 'fire';
+        
+        // Ice spells
+        if (lowerText.match(/ice|freeze|frost|chill|blizzard|glacier|cold/)) return 'ice';
+        
+        // Water spells
+        if (lowerText.match(/water|wave|flood|tsunami|rain|aqua|splash/)) return 'water';
+        
+        // Lightning spells
+        if (lowerText.match(/lightning|thunder|electric|shock|bolt|spark|zap/)) return 'lightning';
+        
+        // Earth spells
+        if (lowerText.match(/earth|rock|stone|boulder|quake|ground|mud/)) return 'earth';
+        
+        // Wind spells
+        if (lowerText.match(/wind|air|gust|tornado|hurricane|breeze|gale/)) return 'wind';
+        
+        // Poison spells
+        if (lowerText.match(/poison|toxic|venom|acid|plague|disease/)) return 'poison';
+        
+        // Holy/Light spells
+        if (lowerText.match(/holy|light|divine|sacred|heal|blessing|radiant|celestial/)) return 'holy';
+        
+        // Dark spells
+        if (lowerText.match(/dark|shadow|curse|death|doom|void|abyss/)) return 'dark';
+        
+        return null;
     }
 }
