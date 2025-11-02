@@ -76,6 +76,7 @@ export class TalkJSService {
                         this.processedMessages.add(m.id);
                         const senderName = m.sender?.name || 'System';
                         const messageText = `${senderName}: ${m.plaintext}`;
+                        const senderId = m.sender?.id;
                         
                         // Extract effects data to track positions
                         let effectsData = null;
@@ -110,7 +111,6 @@ export class TalkJSService {
                         if (this.conversationHistory.length > this.maxHistoryLength) {
                             this.conversationHistory.shift();
                         }
-                        const senderId = m.sender?.id;
                         
                         // Update turn tracking
                         if (senderId) {
@@ -125,7 +125,7 @@ export class TalkJSService {
                             }
                         }
                         
-                        // effectsData already extracted above for position tracking
+                        // Log effects if present
                         if (effectsData) {
                             console.log('Received message with effects:', messageText, effectsData);
                         }
