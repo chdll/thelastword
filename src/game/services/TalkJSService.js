@@ -77,11 +77,33 @@ export class TalkJSService {
                         const senderName = m.sender?.name || 'System';
                         const messageText = `${senderName}: ${m.plaintext}`;
                         
-                        // Store in conversation history for context
+                        // Extract effects data to track positions
+                        let effectsData = null;
+                        let positionInfo = null;
+                        if (m.custom && m.custom.effects) {
+                            try {
+                                effectsData = JSON.parse(m.custom.effects);
+                                // Extract position info for overlap prevention
+                                if (effectsData.animationPath && effectsData.animationPath.length > 0) {
+                                    const firstPos = effectsData.animationPath[0];
+                                    positionInfo = {
+                                        x: firstPos.x,
+                                        y: firstPos.y,
+                                        zone: this.getScreenZone(firstPos.x, firstPos.y)
+                                    };
+                                }
+                            } catch (e) {
+                                console.error('Failed to parse effects data:', e);
+                            }
+                        }
+                        
+                        // Store in conversation history for context with position data
                         this.conversationHistory.push({
                             sender: senderName,
                             text: m.plaintext,
-                            timestamp: m.timestamp || Date.now()
+                            timestamp: m.timestamp || Date.now(),
+                            position: positionInfo,
+                            hasParticles: effectsData?.particles !== undefined
                         });
                         
                         // Keep only recent messages
@@ -103,15 +125,9 @@ export class TalkJSService {
                             }
                         }
                         
-                        // Extract effects data from custom field if present
-                        let effectsData = null;
-                        if (m.custom && m.custom.effects) {
-                            try {
-                                effectsData = JSON.parse(m.custom.effects);
-                                console.log('Received message with effects:', messageText, effectsData);
-                            } catch (e) {
-                                console.error('Failed to parse effects data:', e);
-                            }
+                        // effectsData already extracted above for position tracking
+                        if (effectsData) {
+                            console.log('Received message with effects:', messageText, effectsData);
                         }
                         
                         newMessages.push({ text: messageText, effects: effectsData });
@@ -237,14 +253,68 @@ export class TalkJSService {
             
             const model = 'gemini-flash-lite-latest';
             
-            // Build conversation history context
+            // Build conversation history context with detailed battle context
             let historyContext = '';
             if (this.conversationHistory.length > 0) {
-                historyContext = '\n\nRECENT CONVERSATION HISTORY (use this to create dynamic, escalating battles):\n';
-                this.conversationHistory.slice(-8).forEach(msg => {
-                    historyContext += `${msg.sender}: ${msg.text}\n`;
+                const recentHistory = this.conversationHistory.slice(-8);
+                historyContext = '\n\n=== RECENT BATTLE HISTORY (Last 8 messages) ===\n';
+                recentHistory.forEach((msg, index) => {
+                    const posInfo = msg.position ? ` [Position: ${msg.position.zone} (${msg.position.x},${msg.position.y})]` : '';
+                    const particleInfo = msg.hasParticles ? ' [HAS PARTICLES]' : ' [NO PARTICLES]';
+                    historyContext += `[${index + 1}] ${msg.sender}: "${msg.text}"${posInfo}${particleInfo}\n`;
                 });
-                historyContext += '\nUse this history to:\n- Escalate intensity if battle is heating up\n- React to opponent\'s last move (counter fire with ice, etc.)\n- Build narrative progression (small attacks → bigger attacks)\n- Create combo effects when messages relate to previous ones\n- Match or exceed the energy level of recent exchanges\n';
+                
+                // Analyze battle progression
+                const attackKeywords = ['fire', 'ice', 'attack', 'strike', 'blast', 'explosion', 'punch', 'kick', 'shoot', 'throw', 'slash'];
+                const defenseKeywords = ['block', 'shield', 'dodge', 'defend', 'counter', 'parry', 'reflect'];
+                
+                let attackCount = 0;
+                let lastAttackType = null;
+                recentHistory.forEach(msg => {
+                    const text = msg.text.toLowerCase();
+                    if (attackKeywords.some(kw => text.includes(kw))) {
+                        attackCount++;
+                        // Detect element type from last attack
+                        if (text.includes('fire') || text.includes('flame') || text.includes('burn')) lastAttackType = 'fire';
+                        else if (text.includes('ice') || text.includes('freeze') || text.includes('frost')) lastAttackType = 'ice';
+                        else if (text.includes('poison') || text.includes('toxic') || text.includes('venom')) lastAttackType = 'poison';
+                        else if (text.includes('lightning') || text.includes('thunder') || text.includes('electric')) lastAttackType = 'electric';
+                    }
+                });
+                
+                // Analyze zone usage to help avoid overlaps
+                const zoneUsage = {};
+                const recentPositions = recentHistory.filter(msg => msg.position).slice(-5); // Last 5 positioned messages
+                recentPositions.forEach(msg => {
+                    const zone = msg.position.zone;
+                    zoneUsage[zone] = (zoneUsage[zone] || 0) + 1;
+                });
+                
+                // Find least used zones
+                const allZones = ['left-top', 'left-middle', 'left-bottom', 'center-top', 'center-middle', 'center-bottom', 'right-top', 'right-middle', 'right-bottom'];
+                const leastUsedZones = allZones.filter(z => !zoneUsage[z] || zoneUsage[z] < 2);
+                
+                historyContext += '\n=== BATTLE CONTEXT ANALYSIS ===\n';
+                historyContext += `- Battle Intensity: ${attackCount < 2 ? 'LOW (early game)' : attackCount < 4 ? 'MEDIUM (heating up)' : 'HIGH (intense battle)'}\n`;
+                if (lastAttackType) {
+                    historyContext += `- Last Element Used: ${lastAttackType.toUpperCase()} (consider counter-element)\n`;
+                }
+                historyContext += `- Message Count: ${recentHistory.length} (more messages = more escalation needed)\n`;
+                
+                if (recentPositions.length > 0) {
+                    historyContext += `- Recent Positions Used: ${recentPositions.map(m => m.position.zone).join(', ')}\n`;
+                    if (leastUsedZones.length > 0) {
+                        historyContext += `- SUGGESTED ZONES (less crowded): ${leastUsedZones.slice(0, 3).join(', ')}\n`;
+                    }
+                }
+                
+                historyContext += '\n=== YOUR OBJECTIVES ===\n';
+                historyContext += '1. AVOID OVERLAPPING: Vary X/Y positions from recent messages (spread across screen)\n';
+                historyContext += '2. PROGRESSIVE ESCALATION: Each attack should be MORE intense than previous\n';
+                historyContext += '3. ELEMENTAL COUNTERS: Fire↔Ice, Lightning↔Earth, Poison↔Holy\n';
+                historyContext += '4. POSITION VARIETY: Don\'t cluster all effects in same area\n';
+                historyContext += '5. NARRATIVE FLOW: Make this message a logical next step in the battle story\n';
+                historyContext += '6. TIMING VARIETY: Alternate between fast strikes (800-1200ms) and dramatic moves (1800-2500ms)\n';
             }
             
             const prompt = `You are a creative game effects designer. Generate visual effects for text box animations.
@@ -296,12 +366,41 @@ Response: {"fontSize":22,"colors":{"text":"#000000","background":0xcccccc,"borde
 Message: "poison cloud"
 Response: {"fontSize":30,"colors":{"text":"#ffffff","background":0x009900,"border":0x006600},"animationPath":[{"x":700,"y":400,"duration":1800},{"x":1200,"y":500,"duration":2000}],"particles":{"colors":[0x00cc00,0x66ff00,0x99ff33],"speed":{"min":25,"max":50},"angle":{"min":260,"max":280},"scale":{"start":2,"end":3},"lifespan":1800,"frequency":50,"quantity":2}}
 
-BATTLE CONTEXT GUIDELINES:
-- If conversation shows escalation (slap → punch → fireball), make THIS message even MORE intense
-- Counter opponent's element (they used fire? Use ice/water themed response)
-- First attacks should be small/simple, later attacks larger/more complex
-- Match the combat pace: fast exchanges = shorter durations, epic moments = slower dramatic animations
-- Create visual storytelling: defensive moves use shields/barriers, aggressive moves use strikes/projectiles
+CRITICAL: AVOID OVERLAPPING EFFECTS
+- Spread effects across screen (vary X positions: left=200-600, center=700-1200, right=1300-1720)
+- Alternate Y positions (top=200-400, middle=400-700, bottom=700-880)
+- If recent messages used left side, move to center or right
+- Don't use same position consecutively
+
+BATTLE STORY COHERENCE:
+1. ESCALATION CURVE:
+   - Messages 1-2: Small effects (fontSize 20-28, minimal particles)
+   - Messages 3-5: Medium effects (fontSize 30-38, moderate particles)
+   - Messages 6+: Large effects (fontSize 40-48, intense particles)
+
+2. ELEMENTAL COUNTER-PLAY:
+   - Fire (red/orange) → Counter with Ice (blue/white)
+   - Ice (blue) → Counter with Fire (red/orange)  
+   - Poison (green) → Counter with Holy/Light (yellow/white)
+   - Lightning (yellow/cyan) → Counter with Earth (brown/green)
+   - Use opposite colors and themes
+
+3. POSITION STORYTELLING:
+   - Aggressive attacks: Move toward opponent (x increases if Alice, decreases if Bob)
+   - Defensive moves: Stay in place or retreat (single waypoint)
+   - Dodges: Quick diagonal movement (2 waypoints, short duration)
+   - Ultimate attacks: Center screen (x=960, y=540)
+
+4. TIMING VARIATION:
+   - Quick attacks: 800-1200ms duration
+   - Normal moves: 1200-1800ms duration  
+   - Power moves: 1800-2500ms duration
+   - Alternate fast/slow to create rhythm
+
+5. PARTICLE INTENSITY MATCHING:
+   - Early game: quantity 1-2, frequency 50-100ms
+   - Mid game: quantity 2-3, frequency 30-50ms
+   - Late game: quantity 3-5, frequency 20-30ms
 ${historyContext}
 
 Now analyze this message and generate appropriate effects:
@@ -436,5 +535,23 @@ Return ONLY valid JSON matching the schema.`;
             isMyTurn: this.isMyTurn,
             turnMessage: this.isMyTurn ? 'Your turn' : 'Waiting for opponent...'
         };
+    }
+
+    /**
+     * Helper method to determine screen zone for position tracking
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate  
+     * @returns {string} - Zone identifier (e.g., "left-top", "center-middle")
+     */
+    getScreenZone(x, y) {
+        let horizontal = 'center';
+        if (x < 600) horizontal = 'left';
+        else if (x > 1300) horizontal = 'right';
+        
+        let vertical = 'middle';
+        if (y < 400) vertical = 'top';
+        else if (y > 700) vertical = 'bottom';
+        
+        return `${horizontal}-${vertical}`;
     }
 }
