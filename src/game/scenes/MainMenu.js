@@ -82,6 +82,10 @@ export class MainMenu extends Scene
             if (effectsData.effect && effectsData.effect !== 'null' && effectsData.effect !== null) {
                 options.effect = effectsData.effect;
             }
+            // Apply font size
+            if (effectsData.fontSize) {
+                options.fontSize = effectsData.fontSize;
+            }
             // Apply colors
             if (effectsData.colors) {
                 options.colors = effectsData.colors;

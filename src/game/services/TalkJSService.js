@@ -122,11 +122,15 @@ export class TalkJSService {
                 responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
-                    required: ["effect", "colors", "animationPath"],
+                    required: ["effect", "colors", "animationPath", "fontSize"],
                     properties: {
                         effect: {
                             type: Type.STRING,
                             description: "Particle effect type: 'fire', 'ice', 'poison', 'smoke', or null"
+                        },
+                        fontSize: {
+                            type: Type.NUMBER,
+                            description: "Font size in pixels (16-48). Small words: 20-24, normal: 26-30, emphasis: 32-40, huge impact: 42-48"
                         },
                         colors: {
                             type: Type.OBJECT,
@@ -168,26 +172,34 @@ export class TalkJSService {
 
 IMPORTANT RULES:
 1. Match the theme/mood of the message (fire for hot/explosive words, ice for cold/calm, poison for toxic/negative, smoke for mysterious)
-2. Choose colors that enhance the theme (fire = reds/oranges, ice = blues/cyans, poison = greens, smoke = grays)
+2. Choose colors that enhance the theme (fire = reds/oranges, ice = blues/cyans, poison = greens, smoke = grays). Ensure text color contrasts well with background color of the text box.
 3. Create animation paths that match the energy (fast/aggressive for attacks, slow/flowing for calm, erratic for chaos)
 4. Use effects sparingly - only when truly thematic. Many messages won't need special effects.
 5. Animation coordinates: x (200-1700), y (200-800) for safe visibility
 6. Duration: 500-3000ms per waypoint (faster for aggressive, slower for calm)
 7. Rotation: 0 (no rotation) to 6.28 (full rotation) - use sparingly
+8. Font size based on impact/importance:
+   - Small/whisper: 20-24px
+   - Normal conversation: 26-30px (default: 28px)
+   - Emphasis/shout: 32-40px
+   - HUGE impact/explosion: 42-48px
 
 EXAMPLES:
 
 Message: "fireball"
-Response: {"effect":"fire","colors":{"text":"#ffffff","background":16711680,"border":13369344},"animationPath":[{"x":400,"y":400,"duration":800,"rotation":0},{"x":1500,"y":400,"duration":1200,"rotation":3.14}]}
+Response: {"effect":"fire","fontSize":36,"colors":{"text":"#ffffff","background":16711680,"border":13369344},"animationPath":[{"x":400,"y":400,"duration":800,"rotation":0},{"x":1500,"y":400,"duration":1200,"rotation":3.14}]}
 
 Message: "ice shard"
-Response: {"effect":"ice","colors":{"text":"#ffffff","background":52479,"border":39423},"animationPath":[{"x":960,"y":300,"duration":1500,"rotation":0},{"x":960,"y":600,"duration":2000,"rotation":0.5}]}
+Response: {"effect":"ice","fontSize":30,"colors":{"text":"#ffffff","background":52479,"border":39423},"animationPath":[{"x":960,"y":300,"duration":1500,"rotation":0},{"x":960,"y":600,"duration":2000,"rotation":0.5}]}
 
 Message: "hello there"
-Response: {"effect":null,"colors":{"text":"#0f172a","background":16777215,"border":15132395},"animationPath":[{"x":500,"y":400,"duration":2000,"rotation":0},{"x":1400,"y":400,"duration":2500,"rotation":0}]}
+Response: {"effect":null,"fontSize":28,"colors":{"text":"#0f172a","background":16777215,"border":15132395},"animationPath":[{"x":500,"y":400,"duration":2000,"rotation":0},{"x":1400,"y":400,"duration":2500,"rotation":0}]}
 
-Message: "toxic waste"
-Response: {"effect":"poison","colors":{"text":"#00ff00","background":52224,"border":39168},"animationPath":[{"x":800,"y":400,"duration":1800,"rotation":0},{"x":600,"y":600,"duration":1500,"rotation":1.57},{"x":1200,"y":500,"duration":1800,"rotation":3.14}]}
+Message: "EXPLOSION!!!"
+Response: {"effect":"fire","fontSize":48,"colors":{"text":"#ffff00","background":16711680,"border":13369344},"animationPath":[{"x":960,"y":540,"duration":500,"rotation":0},{"x":960,"y":540,"duration":100,"rotation":6.28}]}
+
+Message: "whisper"
+Response: {"effect":"smoke","fontSize":22,"colors":{"text":"#888888","background":15132390,"border":13421772},"animationPath":[{"x":800,"y":400,"duration":3000,"rotation":0},{"x":1100,"y":450,"duration":3000,"rotation":0}]}
 
 Now analyze this message and generate appropriate effects:
 Message: "${message}"
@@ -228,6 +240,7 @@ Return ONLY valid JSON matching the schema.`;
             // Fallback to a default response structure if API fails
             return {
                 effect: null,
+                fontSize: 28,
                 colors: {
                     text: '#0f172a',
                     background: 0xffffff,

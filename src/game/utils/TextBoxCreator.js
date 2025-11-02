@@ -19,11 +19,15 @@ export class TextBoxCreator {
      * @param {object} options.colors - Color configuration {text, background, border}
      * @param {Array<{x: number, y: number, duration?: number, rotation?: number}>} options.animationPath - Array of points defining the animation path. Each point can have optional duration (in ms) and rotation (in radians) for the transition to that point. If not provided, generates 2 random points.
      * @param {string} options.effect - Particle effect type: 'fire', 'ice', 'poison', 'smoke', or null (default: null)
+     * @param {number} options.fontSize - Font size in pixels (default: 28)
      * @returns {object} - Returns {text, gfx, container, tween, particles}
      */
     create(label, startPosition, currentDepth, options = {}) {
+        // Get font size from options or use default
+        const fontSize = options.fontSize || 28;
+        
         // Calculate text dimensions
-        const { width: bw, height: bh } = this.calculateDimensions(label);
+        const { width: bw, height: bh } = this.calculateDimensions(label, fontSize);
         
         // Calculate safe boundaries
         const bounds = this.calculateSafeBounds(bw, bh);
@@ -50,10 +54,10 @@ export class TextBoxCreator {
         // Get text color from options or use default
         const textColor = options.colors?.text ?? '#0f172a';
         
-        // Create text element
+        // Create text element with dynamic font size
         const text = this.scene.add.text(startPosition.x, startPosition.y, label, {
             fontFamily: 'Arial, Helvetica, sans-serif',
-            fontSize: '28px',
+            fontSize: `${fontSize}px`,
             color: textColor,
             align: 'center',
         }).setOrigin(0.5);
@@ -85,10 +89,10 @@ export class TextBoxCreator {
         return { text, gfx, container, tween: null, particles };
     }
 
-    calculateDimensions(label) {
+    calculateDimensions(label, fontSize = 28) {
         const tempText = this.scene.add.text(0, 0, label, {
             fontFamily: 'Arial, Helvetica, sans-serif',
-            fontSize: '28px',
+            fontSize: `${fontSize}px`,
             color: '#0f172a',
             align: 'center',
         }).setOrigin(0.5);
