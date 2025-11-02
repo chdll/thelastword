@@ -77,6 +77,32 @@ export class TalkJSService {
                         const senderName = m.sender?.name || 'System';
                         const messageText = `${senderName}: ${m.plaintext}`;
                         
+                        // Store in conversation history for context
+                        this.conversationHistory.push({
+                            sender: senderName,
+                            text: m.plaintext,
+                            timestamp: m.timestamp || Date.now()
+                        });
+                        
+                        // Keep only recent messages
+                        if (this.conversationHistory.length > this.maxHistoryLength) {
+                            this.conversationHistory.shift();
+                        }
+                        const senderId = m.sender?.id;
+                        
+                        // Update turn tracking
+                        if (senderId) {
+                            this.lastMessageSenderId = senderId;
+                            // It's my turn if the other person just sent a message
+                            const wasMyTurn = this.isMyTurn;
+                            this.isMyTurn = (senderId !== this.currentUserId);
+                            
+                            // Notify turn change if callback exists and turn actually changed
+                            if (this.turnChangeCallback && wasMyTurn !== this.isMyTurn) {
+                                this.turnChangeCallback(this.isMyTurn);
+                            }
+                        }
+                        
                         // Extract effects data from custom field if present
                         let effectsData = null;
                         if (m.custom && m.custom.effects) {
