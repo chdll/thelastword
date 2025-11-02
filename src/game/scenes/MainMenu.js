@@ -34,7 +34,20 @@ export class MainMenu extends Scene
         var player2 = this.add.image(window.innerWidth - window.innerWidth / 4, window.innerHeight - window.innerHeight / 3, 'wizard 1').setFlipX(true);
         player1.setScale(0.5);
         player2.setScale(0.5);
-        // const tween = this.tweens.add({
+        
+        // Animate wizards by alternating between idle frames
+        let currentFrame = 1;
+        this.time.addEvent({
+            delay: 500, // 0.5 seconds
+            callback: () => {
+                currentFrame = currentFrame === 1 ? 2 : 1;
+                const texture = `wizard ${currentFrame}`;
+                player1.setTexture(texture);
+                player2.setTexture(texture);
+            },
+            loop: true
+        });
+        
         // Create input box
         this.uiManager.createInputBox((message) => {
             this.talkJSService.sendMessage(message);
