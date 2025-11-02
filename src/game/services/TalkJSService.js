@@ -158,44 +158,77 @@ export class TalkJSService {
                 responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
-                    required: ["effect", "colors", "animationPath", "fontSize"],
+                    required: ["colors", "animationPath", "fontSize"],
                     properties: {
-                        effect: {
-                            type: Type.STRING,
-                            description: "Particle effect type: 'fire', 'ice', 'poison', 'smoke', or null"
-                        },  
                         fontSize: {
                             type: Type.NUMBER,
-                            description: "Font size in pixels."
+                            description: "Font size: 20-48 pixels only"
                         },
                         colors: {
                             type: Type.OBJECT,
+                            required: ["text", "background", "border"],
                             properties: {
                                 text: {
                                     type: Type.STRING,
-                                    description: "Text color in hex format (e.g., '#ff0000')"
+                                    description: "Text color hex: #000000 or #ffffff only"
                                 },
                                 background: {
                                     type: Type.NUMBER,
-                                    description: "Background color as hex number (e.g., 0xff0000)"
+                                    description: "Background hex number (0x000000-0xffffff)"
                                 },
                                 border: {
                                     type: Type.NUMBER,
-                                    description: "Border color as hex number (e.g., 0xff0000)"
+                                    description: "Border hex number (0x000000-0xffffff)"
                                 }
                             }
                         },
                         animationPath: {
                             type: Type.ARRAY,
-                            description: "Array of animation waypoints",
+                            description: "1-3 waypoints only",
                             items: {
                                 type: Type.OBJECT,
+                                required: ["x", "y", "duration"],
                                 properties: {
-                                    x: { type: Type.NUMBER, description: "X position (0-1920)" },
-                                    y: { type: Type.NUMBER, description: "Y position (0-1080)" },
-                                    duration: { type: Type.NUMBER, description: "Duration to reach this point in ms (500-3000)" },
-                                    rotation: { type: Type.NUMBER, description: "Rotation in radians (0 to 6.28)" }
+                                    x: { type: Type.NUMBER, description: "X: 200-1720" },
+                                    y: { type: Type.NUMBER, description: "Y: 200-880" },
+                                    duration: { type: Type.NUMBER, description: "Duration: 800-2500ms" },
+                                    rotation: { type: Type.NUMBER, description: "Rotation: 0-6.28 (optional)" }
                                 }
+                            }
+                        },
+                        particles: {
+                            type: Type.OBJECT,
+                            description: "Custom particle effect config (optional, omit for no particles)",
+                            properties: {
+                                colors: {
+                                    type: Type.ARRAY,
+                                    description: "2-4 hex colors for particles",
+                                    items: { type: Type.NUMBER }
+                                },
+                                speed: { 
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        min: { type: Type.NUMBER, description: "20-100" },
+                                        max: { type: Type.NUMBER, description: "40-150" }
+                                    }
+                                },
+                                angle: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        min: { type: Type.NUMBER, description: "0-360" },
+                                        max: { type: Type.NUMBER, description: "0-360" }
+                                    }
+                                },
+                                scale: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        start: { type: Type.NUMBER, description: "1-3" },
+                                        end: { type: Type.NUMBER, description: "0-1" }
+                                    }
+                                },
+                                lifespan: { type: Type.NUMBER, description: "500-2000ms" },
+                                frequency: { type: Type.NUMBER, description: "20-100ms" },
+                                quantity: { type: Type.NUMBER, description: "1-5 particles" }
                             }
                         }
                     }
@@ -214,49 +247,54 @@ export class TalkJSService {
                 historyContext += '\nUse this history to:\n- Escalate intensity if battle is heating up\n- React to opponent\'s last move (counter fire with ice, etc.)\n- Build narrative progression (small attacks → bigger attacks)\n- Create combo effects when messages relate to previous ones\n- Match or exceed the energy level of recent exchanges\n';
             }
             
-            const prompt = `You are a creative game effects designer. Analyze the user's message and generate thematic visual effects for a text box animation.
+            const prompt = `You are a creative game effects designer. Generate visual effects for text box animations.
 
-CRITICAL COLOR CONTRAST RULES:
-- ALWAYS ensure high contrast between text and background
-- Dark backgrounds (0x000000-0x888888) MUST use light text (#ffffff, #ffff00, #00ffff, etc.)
-- Light backgrounds (0x999999-0xffffff) MUST use dark text (#000000, #0f172a, #1a1a1a, etc.)
-- Never use similar brightness values for text and background
-- Test: Can you read white text on yellow? NO! Can you read black text on yellow? YES!
+STRICT RULES (VIOLATIONS WILL FAIL):
+1. Text color: ONLY #000000 (black) or #ffffff (white)
+2. Text color selection:
+   - Dark backgrounds (0x000000-0x888888): Use #ffffff
+   - Light backgrounds (0x999999-0xffffff): Use #000000
+3. Font size: 20-48 only
+4. Animation path: 1-3 waypoints MAXIMUM
+5. X position: 200-1720, Y position: 200-880
+6. Duration: 800-2500ms per waypoint
+7. Particles are OPTIONAL - omit entire "particles" object for simple messages
 
-THEME RULES:
-1. Match the theme/mood (fire=hot/explosive, ice=cold/calm, poison=toxic, smoke=mysterious)
-2. Choose thematic colors WITH PROPER CONTRAST:
-   - Fire: Dark red/orange background (0xcc0000-0xff4500) + WHITE text (#ffffff)
-   - Ice: Dark blue background (0x0066cc-0x0099ff) + WHITE text (#ffffff)
-   - Poison: Dark green background (0x006600-0x00cc00) + WHITE or YELLOW text
-   - Smoke: Medium gray background (0x666666-0x999999) + BLACK or WHITE text
-   - Normal: White background (0xffffff) + DARK text (#0f172a)
-3. Animation paths match energy (fast/aggressive for attacks, slow/calm)
-4. Use effects sparingly - not every message needs effects
-5. Animation duration and intensity match mood
-6. Duration: 500-3000ms (faster=aggressive, slower=calm)
-7. Rotation: 0-6.28 radians (use sparingly)
-8. Font size matches mood
+PARTICLE RULES (when included):
+- Colors: 2-4 hex numbers (e.g., [0xff0000, 0xff6600, 0xffaa00])
+- Speed: min 20-100, max 40-150
+- Angle: 0-360 degrees
+- Scale: start 1-3, end 0-1
+- Lifespan: 500-2000ms
+- Frequency: 20-100ms
+- Quantity: 1-5 particles per emission
+
+THEME GUIDELINES:
+- Fire: Red/orange particles (0xcc0000, 0xff4500, 0xff9900), upward angle 250-290
+- Ice: Blue/white particles (0x0099ff, 0x66ccff, 0xffffff), downward or outward
+- Poison: Green/yellow particles (0x00cc00, 0x66ff00, 0xffff00), bubbling effect
+- Energy: Bright particles (0xffff00, 0x00ffff, 0xff00ff), fast speed
+- Simple messages: NO particles
 
 EXAMPLES:
 
 Message: "fireball"
-Response: {"effect":"fire","fontSize":36,"colors":{"text":"#ffffff","background":13369344,"border":10027008},"animationPath":[{"x":400,"y":400,"duration":800,"rotation":0},{"x":1500,"y":400,"duration":1200,"rotation":3.14}]}
+Response: {"fontSize":38,"colors":{"text":"#ffffff","background":0xcc0000,"border":0x990000},"animationPath":[{"x":400,"y":400,"duration":1000},{"x":1500,"y":400,"duration":1200,"rotation":3.14}],"particles":{"colors":[0xff0000,0xff6600,0xffaa00],"speed":{"min":60,"max":120},"angle":{"min":250,"max":290},"scale":{"start":2.5,"end":0.5},"lifespan":1200,"frequency":30,"quantity":3}}
 
 Message: "ice shard"
-Response: {"effect":"ice","fontSize":30,"colors":{"text":"#ffffff","background":52479,"border":39423},"animationPath":[{"x":960,"y":300,"duration":1500,"rotation":0},{"x":960,"y":600,"duration":2000,"rotation":0.5}]}
+Response: {"fontSize":32,"colors":{"text":"#ffffff","background":0x0066cc,"border":0x004499},"animationPath":[{"x":960,"y":300,"duration":1500},{"x":960,"y":700,"duration":2000}],"particles":{"colors":[0x00ccff,0x66ffff,0xffffff],"speed":{"min":30,"max":60},"angle":{"min":80,"max":100},"scale":{"start":2,"end":0},"lifespan":1500,"frequency":40,"quantity":2}}
 
 Message: "hello there"
-Response: {"effect":null,"fontSize":28,"colors":{"text":"#0f172a","background":16777215,"border":15132395},"animationPath":[{"x":500,"y":400,"duration":2000,"rotation":0},{"x":1400,"y":400,"duration":2500,"rotation":0}]}
+Response: {"fontSize":28,"colors":{"text":"#000000","background":0xffffff,"border":0xe5e7eb},"animationPath":[{"x":600,"y":400,"duration":2000},{"x":1300,"y":400,"duration":2000}]}
 
-Message: "EXPLOSION!!!"
-Response: {"effect":"fire","fontSize":48,"colors":{"text":"#ffff00","background":10027008,"border":6684672},"animationPath":[{"x":960,"y":540,"duration":500,"rotation":0},{"x":960,"y":540,"duration":100,"rotation":6.28}]}
+Message: "BOOM!"
+Response: {"fontSize":46,"colors":{"text":"#ffffff","background":0xff4500,"border":0xcc3300},"animationPath":[{"x":960,"y":540,"duration":800,"rotation":6.28}],"particles":{"colors":[0xff0000,0xff6600,0xff9900,0xffcc00],"speed":{"min":80,"max":150},"angle":{"min":0,"max":360},"scale":{"start":3,"end":0},"lifespan":800,"frequency":20,"quantity":5}}
 
 Message: "whisper"
-Response: {"effect":"smoke","fontSize":22,"colors":{"text":"#000000","background":13421772,"border":10066329},"animationPath":[{"x":800,"y":400,"duration":3000,"rotation":0},{"x":1100,"y":450,"duration":3000,"rotation":0}]}
+Response: {"fontSize":22,"colors":{"text":"#000000","background":0xcccccc,"border":0x999999},"animationPath":[{"x":800,"y":450,"duration":2500}]}
 
-Message: "toxic"
-Response: {"effect":"poison","fontSize":32,"colors":{"text":"#ffff00","background":26112,"border":13056},"animationPath":[{"x":700,"y":400,"duration":1500,"rotation":0},{"x":1200,"y":500,"duration":1800,"rotation":1.57}]}
+Message: "poison cloud"
+Response: {"fontSize":30,"colors":{"text":"#ffffff","background":0x009900,"border":0x006600},"animationPath":[{"x":700,"y":400,"duration":1800},{"x":1200,"y":500,"duration":2000}],"particles":{"colors":[0x00cc00,0x66ff00,0x99ff33],"speed":{"min":25,"max":50},"angle":{"min":260,"max":280},"scale":{"start":2,"end":3},"lifespan":1800,"frequency":50,"quantity":2}}
 
 BATTLE CONTEXT GUIDELINES:
 - If conversation shows escalation (slap → punch → fireball), make THIS message even MORE intense
@@ -304,16 +342,15 @@ Return ONLY valid JSON matching the schema.`;
             console.error('Error processing message through Gemini API:', error);
             // Fallback to a default response structure if API fails
             return {
-                effect: null,
                 fontSize: 28,
                 colors: {
-                    text: '#0f172a',
+                    text: '#000000',
                     background: 0xffffff,
                     border: 0xe5e7eb
                 },
                 animationPath: [
-                    { x: 500, y: 400, duration: 2000, rotation: 0 },
-                    { x: 1400, y: 400, duration: 2500, rotation: 0 }
+                    { x: 600, y: 400, duration: 2000 },
+                    { x: 1300, y: 400, duration: 2000 }
                 ]
             };
         }

@@ -99,10 +99,7 @@ export class MainMenu extends Scene
         
         if (effectsData) {
             console.log('Applying synced Gemini effects to message:', label, effectsData);
-            // Handle effect (check for null, 'null' string, or empty)
-            if (effectsData.effect && effectsData.effect !== 'null' && effectsData.effect !== null) {
-                options.effect = effectsData.effect;
-            }
+            
             // Apply font size
             if (effectsData.fontSize) {
                 options.fontSize = effectsData.fontSize;
@@ -114,6 +111,10 @@ export class MainMenu extends Scene
             // Apply animation path
             if (effectsData.animationPath && effectsData.animationPath.length > 0) {
                 options.animationPath = effectsData.animationPath;
+            }
+            // Apply custom particle config from Gemini
+            if (effectsData.particles) {
+                options.particles = effectsData.particles;
             }
         }
         

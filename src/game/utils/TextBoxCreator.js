@@ -82,10 +82,10 @@ export class TextBoxCreator {
         
         text.setDepth(currentDepth + 1);
         
-        // Create particle effect if specified
+        // Create particle effect if custom config provided
         let particles = null;
-        if (options.effect) {
-            particles = this.createParticleEffect(options.effect, container, currentDepth);
+        if (options.particles) {
+            particles = this.createCustomParticleEffect(options.particles, container, currentDepth);
         }
         
         // Animate the text box along the path
@@ -199,153 +199,49 @@ export class TextBoxCreator {
         animateToNextPoint();
     }
 
-    createParticleEffect(effectType, container, depth) {
-        const effectType_lower = effectType.toLowerCase();
+    /**
+     * Create custom particle effect from Gemini config
+     * @param {Object} particleConfig - Particle configuration from Gemini
+     * @param {Phaser.GameObjects.Container} container - Container to attach particles to
+     * @param {number} depth - Depth layer for particles
+     */
+    createCustomParticleEffect(particleConfig, container, depth) {
+        // Generate unique texture name based on colors
+        const colorHash = particleConfig.colors.join('_');
+        const textureName = `particle_${colorHash}`;
         
-        switch(effectType_lower) {
-            case 'fire':
-                return this.createFireEffect(container, depth);
-            case 'ice':
-                return this.createIceEffect(container, depth);
-            case 'poison':
-                return this.createPoisonEffect(container, depth);
-            case 'smoke':
-                return this.createSmokeEffect(container, depth);
-            default:
-                console.warn(`Unknown effect type: ${effectType}`);
-                return null;
-        }
-    }
-
-    createParticleTexture(textureName, createCallback) {
+        // Create particle texture if it doesn't exist
         if (!this.particleTexturesCreated.has(textureName) && !this.scene.textures.exists(textureName)) {
-            createCallback();
+            const particleGraphics = this.scene.add.graphics();
+            
+            // Draw multi-colored circle using provided colors
+            const colors = particleConfig.colors;
+            const numColors = colors.length;
+            
+            for (let i = 0; i < numColors; i++) {
+                const radius = 8 - (i * 2);
+                if (radius > 0) {
+                    particleGraphics.fillStyle(colors[i], 1);
+                    particleGraphics.fillCircle(8, 8, radius);
+                }
+            }
+            
+            particleGraphics.generateTexture(textureName, 16, 16);
+            particleGraphics.destroy();
             this.particleTexturesCreated.add(textureName);
         }
-    }
-
-    createFireEffect(container, depth) {
-        // Create fire particle texture (reuse if exists)
-        const textureName = 'fireParticle';
-        this.createParticleTexture(textureName, () => {
-            const particleGraphics = this.scene.add.graphics();
-            particleGraphics.fillStyle(0xff0000, 1);
-            particleGraphics.fillCircle(8, 8, 6);
-            particleGraphics.fillStyle(0xff6600, 1);
-            particleGraphics.fillCircle(8, 8, 4);
-            particleGraphics.fillStyle(0xffaa00, 1);
-            particleGraphics.fillCircle(8, 8, 2);
-            particleGraphics.generateTexture(textureName, 16, 16);
-            particleGraphics.destroy();
-        });
         
+        // Create emitter with Gemini-provided config
         const emitter = this.scene.add.particles(0, 0, textureName, {
-            speed: { min: 40, max: 80 },
-            angle: { min: 250, max: 290 },
-            scale: { start: 2.5, end: 0.5 },
+            speed: particleConfig.speed || { min: 40, max: 80 },
+            angle: particleConfig.angle || { min: 250, max: 290 },
+            scale: particleConfig.scale || { start: 2, end: 0.5 },
             alpha: { start: 0.9, end: 0 },
-            lifespan: 1200,
-            frequency: 25,
-            quantity: 3,
+            lifespan: particleConfig.lifespan || 1200,
+            frequency: particleConfig.frequency || 30,
+            quantity: particleConfig.quantity || 3,
             blendMode: 'NORMAL',
-            tint: [0xcc0000, 0xff3300, 0xff6600, 0xff9900]
-        });
-        
-        emitter.setDepth(depth - 1);
-        emitter.startFollow(container, 0, 30);
-        return emitter;
-    }
-
-    createIceEffect(container, depth) {
-        // Create ice particle texture (reuse if exists)
-        const textureName = 'iceParticle';
-        this.createParticleTexture(textureName, () => {
-            const particleGraphics = this.scene.add.graphics();
-            particleGraphics.fillStyle(0x00ccff, 1);
-            particleGraphics.fillCircle(8, 8, 6);
-            particleGraphics.fillStyle(0xccffff, 1);
-            particleGraphics.fillCircle(8, 8, 4);
-            particleGraphics.fillStyle(0xffffff, 1);
-            particleGraphics.fillCircle(8, 8, 2);
-            particleGraphics.generateTexture(textureName, 16, 16);
-            particleGraphics.destroy();
-        });
-        
-        const emitter = this.scene.add.particles(0, 0, textureName, {
-            speed: { min: 20, max: 50 },
-            angle: { min: 250, max: 290 },
-            scale: { start: 2, end: 0.3 },
-            alpha: { start: 0.9, end: 0 },
-            lifespan: 1500,
-            frequency: 30,
-            quantity: 2,
-            blendMode: 'NORMAL',
-            tint: [0x0099cc, 0x00ccff, 0x99ffff, 0xccffff],
-            gravityY: -50 // Ice crystals float up
-        });
-        
-        emitter.setDepth(depth - 1);
-        emitter.startFollow(container, 0, 30);
-        return emitter;
-    }
-
-    createPoisonEffect(container, depth) {
-        // Create poison particle texture (reuse if exists)
-        const textureName = 'poisonParticle';
-        this.createParticleTexture(textureName, () => {
-            const particleGraphics = this.scene.add.graphics();
-            particleGraphics.fillStyle(0x00cc00, 1);
-            particleGraphics.fillCircle(8, 8, 6);
-            particleGraphics.fillStyle(0x66ff33, 1);
-            particleGraphics.fillCircle(8, 8, 4);
-            particleGraphics.fillStyle(0xaaff66, 1);
-            particleGraphics.fillCircle(8, 8, 2);
-            particleGraphics.generateTexture(textureName, 16, 16);
-            particleGraphics.destroy();
-        });
-        
-        const emitter = this.scene.add.particles(0, 0, textureName, {
-            speed: { min: 10, max: 30 },
-            angle: { min: 0, max: 360 }, // All directions
-            scale: { start: 1.5, end: 0.3 },
-            alpha: { start: 0.8, end: 0 },
-            lifespan: 2000,
-            frequency: 40,
-            quantity: 2,
-            blendMode: 'NORMAL',
-            tint: [0x006600, 0x00cc00, 0x66ff33, 0x99ff66],
-            gravityY: -20 // Slow upward drift
-        });
-        
-        emitter.setDepth(depth - 1);
-        emitter.startFollow(container, 0, 0); // Center of box
-        return emitter;
-    }
-
-    createSmokeEffect(container, depth) {
-        // Create smoke particle texture (reuse if exists)
-        const textureName = 'smokeParticle';
-        this.createParticleTexture(textureName, () => {
-            const particleGraphics = this.scene.add.graphics();
-            particleGraphics.fillStyle(0x666666, 1);
-            particleGraphics.fillCircle(8, 8, 6);
-            particleGraphics.fillStyle(0x999999, 1);
-            particleGraphics.fillCircle(8, 8, 4);
-            particleGraphics.generateTexture(textureName, 16, 16);
-            particleGraphics.destroy();
-        });
-        
-        const emitter = this.scene.add.particles(0, 0, textureName, {
-            speed: { min: 20, max: 40 },
-            angle: { min: 260, max: 280 },
-            scale: { start: 2, end: 3 }, // Grows as it rises
-            alpha: { start: 0.6, end: 0 },
-            lifespan: 2000,
-            frequency: 50,
-            quantity: 2,
-            blendMode: 'NORMAL',
-            tint: [0x444444, 0x666666, 0x888888, 0xaaaaaa],
-            gravityY: -30
+            tint: particleConfig.colors
         });
         
         emitter.setDepth(depth - 1);
