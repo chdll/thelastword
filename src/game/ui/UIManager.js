@@ -75,4 +75,28 @@ export class UIManager {
     getInputBoxPosition() {
         return this.inputBoxPosition;
     }
+
+    /**
+     * Enable or disable the input box
+     * @param {boolean} enabled - Whether the input should be enabled
+     */
+    setInputEnabled(enabled) {
+        if (!this.dom) return;
+        
+        const inputElement = this.dom.getChildByID('textInput');
+        if (inputElement) {
+            inputElement.disabled = !enabled;
+            
+            // Update visual feedback
+            if (enabled) {
+                inputElement.style.opacity = '1';
+                inputElement.style.cursor = 'text';
+                inputElement.placeholder = 'Type here and press Enter...';
+            } else {
+                inputElement.style.opacity = '0.5';
+                inputElement.style.cursor = 'not-allowed';
+                inputElement.placeholder = 'Waiting for opponent...';
+            }
+        }
+    }
 }
