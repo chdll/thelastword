@@ -17,7 +17,8 @@ export class TextBoxCreator {
      * @param {object} options - Optional configuration
      * @param {object} options.colors - Color configuration {text, background, border}
      * @param {Array<{x: number, y: number, duration?: number, rotation?: number}>} options.animationPath - Array of points defining the animation path. Each point can have optional duration (in ms) and rotation (in radians) for the transition to that point. If not provided, generates 2 random points.
-     * @returns {object} - Returns {text, gfx, container, tween}
+     * @param {boolean} options.fireEffect - Enable fire particle effects (default: false)
+     * @returns {object} - Returns {text, gfx, container, tween, particles}
      */
     create(label, startPosition, currentDepth, options = {}) {
         // Calculate text dimensions
@@ -71,10 +72,16 @@ export class TextBoxCreator {
         
         text.setDepth(currentDepth + 1);
         
+        // Create fire particle effect if enabled
+        let particles = null;
+        if (options.fireEffect) {
+            particles = this.createFireEffect(container, currentDepth - 1);
+        }
+        
         // Animate the text box along the path
         const tween = this.animateTextBox(text, container, pathPoints);
         
-        return { text, gfx, container, tween: null };
+        return { text, gfx, container, tween: null, particles };
     }
 
     calculateDimensions(label) {
@@ -180,5 +187,40 @@ export class TextBoxCreator {
         };
         
         animateToNextPoint();
+    }
+
+    createFireEffect(container, depth) {
+        // Create a simple shape to use as particle texture (only if it doesn't exist)
+        if (!this.scene.textures.exists('fireParticle')) {
+            const particleGraphics = this.scene.add.graphics();
+            particleGraphics.fillStyle(0xff6600, 1);
+            particleGraphics.fillCircle(4, 4, 4);
+            particleGraphics.generateTexture('fireParticle', 8, 8);
+            particleGraphics.destroy();
+        }
+        
+        // Create particle emitter for fire effect
+        const emitter = this.scene.add.particles(0, 0, 'fireParticle', {
+            speed: { min: 20, max: 50 },
+            angle: { min: 250, max: 290 }, // Upward direction
+            scale: { start: 0.8, end: 0 },
+            alpha: { start: 0.8, end: 0 },
+            lifespan: 800,
+            frequency: 40,
+            blendMode: 'ADD',
+            tint: [0xff6600, 0xff9900, 0xffcc00, 0xff3300],
+            emitZone: {
+                source: new Phaser.Geom.Rectangle(-40, 0, 80, 5),
+                type: 'edge',
+                quantity: 20
+            }
+        });
+        
+        emitter.setDepth(depth);
+        
+        // Make particles follow the container
+        emitter.startFollow(container);
+        
+        return emitter;
     }
 }
